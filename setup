@@ -952,9 +952,11 @@ Manual MCP config for any unsupported local client:
 First checks:
   1. Reload/restart the client.
   2. Show the Welcome to Lazyweb message above to the user.
-  3. Confirm /lazyweb and the six canonical skills are visible.
-  4. List MCP tools and confirm the six canonical capability tools plus lazyweb_agentic_search_finalize are present.
-  5. Use the live tool schemas as the source of truth; the skills intentionally do not duplicate them.
+  3. Confirm /lazyweb and the installed Lazyweb skills are visible.
+  4. List MCP tools. If lazyweb_discover_tools and lazyweb_execute are advertised, use steps 5-6.
+  5. Call lazyweb_discover_tools with {"query":"lazyweb_get_workflows","limit":1} to read the current schema.
+  6. Call lazyweb_execute with {"code":"return await tools.lazyweb_get_workflows({operation:'list',task_context:'first run Lazyweb capabilities'});"} and check the returned result for isError.
+  7. If lazyweb_get_workflows is advertised directly, call it with operation=list and task_context="first run Lazyweb capabilities" instead. Missing individual action names are not a reason to reinstall.
 EOF
 
 # Auto-update opt-in. Resolved explicitly via --auto-update / --no-auto-update,

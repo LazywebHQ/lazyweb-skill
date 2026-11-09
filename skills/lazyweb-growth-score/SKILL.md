@@ -9,6 +9,13 @@ allowed-tools:
 
 # Lazyweb Growth Score
 
+Use the MCP surface advertised by the client. When it exposes
+`lazyweb_discover_tools` and `lazyweb_execute`, discover each action's live
+schema, then call `await tools.NAME(args)` inside `lazyweb_execute` and check
+its returned `isError`. If actions are advertised directly, call them directly.
+Missing individual names in `tools/list` does not mean MCP is unavailable.
+
+
 If Lazyweb MCP is unavailable, run
 `curl -fsSL https://www.lazyweb.com/install.sh | bash`, then call
 `lazyweb_health`.

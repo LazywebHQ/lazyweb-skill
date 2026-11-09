@@ -94,10 +94,18 @@ for (const [name, tool] of CORE) {
   assertOutcomeDescription(relativePath, text);
   assert.ok(text.split("\n").length <= 80, `${relativePath} must stay a thin wrapper`);
   assert.match(text, /lazyweb_health/, `${relativePath} must verify MCP health`);
+  assert.match(text, /lazyweb_discover_tools/, `${relativePath} must discover actions on code-mode connections`);
+  assert.match(text, /lazyweb_execute/, `${relativePath} must explain action execution`);
   assert.match(text, /https:\/\/www\.lazyweb\.com\/install\.sh/, `${relativePath} missing installer`);
   assert.match(text, new RegExp(`\\b${tool}\\b`), `${relativePath} missing canonical tool`);
   assert.match(text, /live schema|live contract/i, `${relativePath} must defer to the live tool contract`);
   assert.doesNotMatch(text, /```(?:python|javascript|html|css|sql)/i, `${relativePath} embeds product implementation`);
+}
+
+for (const name of ["lazyweb-update", "lazyweb-apply-design-best-practices", ...DEPRECATED_ALIASES.keys()]) {
+  const text = read(`skills/${name}/SKILL.md`);
+  assert.match(text, /lazyweb_discover_tools/, `${name} must explain action discovery`);
+  assert.match(text, /lazyweb_execute/, `${name} must explain action execution`);
 }
 
 for (const name of ["lazyweb-search-experiments", "lazyweb-search-flows", "lazyweb-search-screens"]) {

@@ -636,8 +636,9 @@ test("setup installs visible skills and direct MCP config into detected local cl
     assert.match(first.stdout, /design improvement feedback on an existing screen or webpage/i);
     assert.match(first.stdout, /\/lazyweb-apply-design-best-practices/);
     assert.match(first.stdout, /\/lazyweb-growth-backlog/);
-    assert.match(first.stdout, /lazyweb_agentic_search_finalize/);
-    assert.match(first.stdout, /live tool schemas as the source of truth/);
+    assert.match(first.stdout, /lazyweb_discover_tools/);
+    assert.match(first.stdout, /lazyweb_execute/);
+    assert.match(first.stdout, /Missing individual action names are not a reason to reinstall/);
     // The autorouter (persistent-instruction routing block + its agent-facing
     // opt-in ask) is removed: install output must never instruct an agent to
     // edit persistent instructions or run a router binary.

@@ -102,6 +102,12 @@ for (const [name, tool] of CORE) {
   assert.doesNotMatch(text, /```(?:python|javascript|html|css|sql)/i, `${relativePath} embeds product implementation`);
 }
 
+for (const name of ["lazyweb-update", "lazyweb-apply-design-best-practices", ...DEPRECATED_ALIASES.keys()]) {
+  const text = read(`skills/${name}/SKILL.md`);
+  assert.match(text, /lazyweb_discover_tools/, `${name} must explain action discovery`);
+  assert.match(text, /lazyweb_execute/, `${name} must explain action execution`);
+}
+
 for (const name of ["lazyweb-search-experiments", "lazyweb-search-flows", "lazyweb-search-screens"]) {
   const text = read(`skills/${name}/SKILL.md`);
   assert.match(text, /agentic_search_id/);

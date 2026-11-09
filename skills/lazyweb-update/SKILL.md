@@ -17,6 +17,13 @@ allowed-tools:
 
 # Lazyweb Update
 
+Use the MCP surface advertised by the client. When it exposes
+`lazyweb_discover_tools` and `lazyweb_execute`, discover each action's live
+schema, then call `await tools.NAME(args)` inside `lazyweb_execute` and check
+its returned `isError`. If actions are advertised directly, call them directly.
+Missing individual names in `tools/list` does not mean MCP is unavailable.
+
+
 Use this skill for maintenance only: update the installed Lazyweb skill pack,
 reinstall the local skills, and verify the active clients can see the result.
 Do not run design research from here.

@@ -94,6 +94,8 @@ for (const [name, tool] of CORE) {
   assertOutcomeDescription(relativePath, text);
   assert.ok(text.split("\n").length <= 80, `${relativePath} must stay a thin wrapper`);
   assert.match(text, /lazyweb_health/, `${relativePath} must verify MCP health`);
+  assert.match(text, /lazyweb_discover_tools/, `${relativePath} must discover actions on code-mode connections`);
+  assert.match(text, /lazyweb_execute/, `${relativePath} must explain action execution`);
   assert.match(text, /https:\/\/www\.lazyweb\.com\/install\.sh/, `${relativePath} missing installer`);
   assert.match(text, new RegExp(`\\b${tool}\\b`), `${relativePath} missing canonical tool`);
   assert.match(text, /live schema|live contract/i, `${relativePath} must defer to the live tool contract`);

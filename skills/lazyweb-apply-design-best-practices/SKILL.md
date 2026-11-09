@@ -30,6 +30,13 @@ allowed-tools:
 
 # Lazyweb Apply Design Best Practices
 
+Use the MCP surface advertised by the client. When it exposes
+`lazyweb_discover_tools` and `lazyweb_execute`, discover each action's live
+schema, then call `await tools.NAME(args)` inside `lazyweb_execute` and check
+its returned `isError`. If actions are advertised directly, call them directly.
+Missing individual names in `tools/list` does not mean MCP is unavailable.
+
+
 There are hundreds of design skills in the world. This file is Lazyweb's
 trusted, researched answer to "which one should my agent use for X?" — built
 from a live review sweep of skills.sh, GitHub, design Twitter/X, Reddit, and
@@ -54,7 +61,7 @@ usage report; label thin evidence honestly.
    `topic` = the section's design aspect (e.g. `web-animation`), `slug` = the
    pick's name (e.g. `emil-design-eng`), and `skill` = `"apply-design-best-practices"`.
    It returns `{ ok, content }` — read `content` in full. **If the Lazyweb MCP
-   isn't available** (the tool isn't in your tool list) or it returns a plain
+   isn't available** (the action is unavailable after discovery) or it returns a plain
    `ok:false` failure, fetch the raw `url` directly with WebFetch instead.
    **Exception — an upgrade-required response is NOT a failure to route around:**
    if the result asks the user to update Lazyweb — `locked:true`, or

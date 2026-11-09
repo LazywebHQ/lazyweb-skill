@@ -96,7 +96,7 @@ accomplish with Lazyweb.
 After setup, reload or restart the client, then:
 
 1. Show the Welcome to Lazyweb message from setup, or fetch `https://www.lazyweb.com/api/mcp/welcome-message` and show it to the user.
-2. List MCP tools. Coding-agent connections expose `lazyweb_discover_tools` and `lazyweb_execute`; individual actions do not need to appear in that list.
+2. List MCP tools. If the client advertises `lazyweb_discover_tools` and `lazyweb_execute`, use the steps below; individual actions do not need to appear in that list.
 3. Call `lazyweb_discover_tools` with `{"query":"lazyweb_get_workflows","limit":1}` to read the current schema, then call `lazyweb_execute` with:
 
 ```json
@@ -105,7 +105,7 @@ After setup, reload or restart the client, then:
 
 4. Check the returned result for `isError`, then summarize the available workflows. Discover the schema for the user's next action before executing it.
 
-OAuth connectors may expose `lazyweb_get_workflows` directly. In that case, call it with `{"operation":"list","task_context":"first run Lazyweb capabilities"}`. Use the tools actually advertised by the client; absent individual action names are not a reason to reinstall.
+If the client advertises `lazyweb_get_workflows` directly, call it with `{"operation":"list","task_context":"first run Lazyweb capabilities"}`. Use the tools actually advertised by the client; absent individual action names are not a reason to reinstall.
 
 A Lazyweb MCP token is a bearer setup credential, not proof of paid access.
 Creating or reusing one does not charge the user, but data-bearing tools still

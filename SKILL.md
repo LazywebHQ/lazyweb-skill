@@ -14,8 +14,8 @@ routes; it does not carry schemas, scoring rules, taxonomies, or product logic.
 When the client advertises `lazyweb_discover_tools` and `lazyweb_execute`,
 discover the desired action's schema first, then await `tools.NAME(args)`
 inside `lazyweb_execute`. Individual action names need not appear in
-`tools/list`. OAuth connectors may expose actions directly; use that advertised
-surface instead.
+`tools/list`. When the client advertises actions directly, use those actions
+instead.
 
 If MCP is unavailable, run `curl -fsSL https://www.lazyweb.com/install.sh | bash`,
 then call `lazyweb_health`.

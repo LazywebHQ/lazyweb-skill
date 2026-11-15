@@ -72,7 +72,7 @@ anything saved in the account; that needs the emailed code.
 
 ### The `/lazyweb` skills
 
-Optional, for people who want the /lazyweb skills. An agent does not need it: step 2 is the whole setup.
+Optional, for people who want the /lazyweb skills. An agent does not need it: connecting needs no script.
 
 ```bash
 curl -fsSL https://www.lazyweb.com/install.sh | bash -s -- you@company.com

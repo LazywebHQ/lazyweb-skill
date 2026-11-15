@@ -168,7 +168,7 @@ const STEP_1 =
 const CANNOT_BE_ASKED =
   "If your user cannot be asked right now, connect without an account: https://design.lazyweb.com/agents/mcp/public (no header). It searches Lazyweb's published research. The whole library opens once your user gives an email.";
 const INSTALLER_INTRO =
-  "Optional, for people who want the /lazyweb skills. An agent does not need it: step 2 is the whole setup.";
+  "Optional, for people who want the /lazyweb skills. An agent does not need it: connecting needs no script.";
 const NOT_CONNECTED =
   "Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com";
 

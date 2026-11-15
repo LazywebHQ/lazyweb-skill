@@ -562,9 +562,11 @@ if (FORMAT === "codex") {
 NODE
 }
 
-# True when this machine already has a Lazyweb connection: an MCP entry in any
-# client config setup can read, or an email recorded by an earlier
-# `setup --email` (which covers clients whose MCP config setup does not write).
+# True when this machine already has Lazyweb: an MCP entry in any client config
+# setup can read, an email recorded by an earlier `setup --email`, or a skill
+# pack installed by any earlier setup (its VERSION marker). The last two cover
+# clients whose MCP config setup does not write, so a no-email run stays a plain
+# skills update for every existing install.
 connection_exists() {
   local spec
   for spec in \
@@ -578,7 +580,7 @@ connection_exists() {
       signin|other) return 0 ;;
     esac
   done
-  [ -s "$EMAIL_FILE" ]
+  [ -s "$EMAIL_FILE" ] || [ -s "$HOME/.lazyweb/VERSION" ]
 }
 
 # connect_file and connect_claude set MCP_NOTE, the MCP half of a client's
@@ -679,7 +681,7 @@ selected_hosts() {
 }
 
 if [ -z "$EMAIL" ] && ! connection_exists; then
-  echo "Usage: setup --email you@company.com   (no Lazyweb MCP connection exists on this machine yet)" >&2
+  echo "Usage: setup --email you@company.com   (Lazyweb is not set up on this machine yet)" >&2
   exit 1
 fi
 

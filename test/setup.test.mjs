@@ -291,6 +291,24 @@ test("a recorded email lets a later no-email run update skills for a client whos
   }
 });
 
+test("a skill pack installed by an earlier setup lets a no-email run update skills without touching anything else", () => {
+  const box = makeSandbox("lazyweb-setup-earlier-install-");
+  const { dir, home, fakeBin, curlLog } = box;
+  mkdirSync(path.join(home, ".config", "opencode"), { recursive: true });
+  mkdirSync(path.join(home, ".lazyweb"), { recursive: true });
+  writeFileSync(path.join(home, ".lazyweb", "VERSION"), "0.15.15\n");
+
+  try {
+    const result = runSetup(home, fakeBin, ["--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.match(result.stdout, /^ {2}OpenCode: skills installed$/m);
+    assert.equal(existsSync(path.join(home, ".lazyweb", "email")), false);
+    assert.equal(existsSync(curlLog), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("auto setup targets the invoking Codex host before scanning other installed clients", () => {
   const box = makeSandbox("lazyweb-setup-active-codex-");
   const { dir, home, fakeBin } = box;

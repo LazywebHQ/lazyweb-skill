@@ -101,8 +101,9 @@ fi
 
 The updater never adds a Lazyweb connection. If setup's summary says
 `No Lazyweb connection was added, because no email was given`, the skills are
-installed and this machine has no Lazyweb connection. Tell the user Lazyweb is
-not connected. To connect it:
+installed and setup found no Lazyweb MCP entry in Codex, Claude Code, Cursor
+or Antigravity. If Lazyweb tools are already listed in your client, you are set up.
+Otherwise tell the user Lazyweb is not connected. To connect it:
 
 Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.
 

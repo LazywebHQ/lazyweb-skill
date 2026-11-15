@@ -173,11 +173,26 @@ test("setup with no email and no Lazyweb connection installs the skills, adds no
       assert.ok(existsSync(path.join(home, client, "skills", "lazyweb-update", "SKILL.md")), `${client} skills must be installed`);
     }
     assertNoConnection(box);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
-    // A second run finds the skill pack from the first one. It still adds no connection.
-    const again = runSetup(home, fakeBin, ["--quiet"]);
-    assert.equal(again.status, 0, again.stderr || again.stdout);
-    assertNoConnection(box);
+test("two no-email runs in a row on an unconnected machine both say how to connect", () => {
+  const box = makeSandbox("lazyweb-setup-no-email-twice-");
+  const { dir, home, fakeBin } = box;
+  mkdirSync(path.join(home, ".cursor"), { recursive: true });
+  const summary = ["", NOT_CONNECTED, "  Cursor: skills installed", "Restart your client to load the changes.", ""].join("\n");
+
+  try {
+    for (const run of ["first", "second"]) {
+      const result = runSetup(home, fakeBin, ["--quiet"]);
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(result.stdout, summary, `${run} run`);
+      assertNoConnection(box);
+    }
+    // The first run left its install markers, and they are not a connection.
+    assert.ok(existsSync(path.join(home, ".lazyweb", "VERSION")));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -315,6 +330,78 @@ test("setup --email never replaces a sign-in connection, in any client", () => {
   }
 });
 
+test("setup --email leaves a sign-in connection that carries a header other than Authorization exactly as it is", () => {
+  const box = makeSandbox("lazyweb-setup-signin-other-header-");
+  const { dir, home, fakeBin } = box;
+  addClaudeCli(box);
+  mkdirSync(path.join(home, ".codex"), { recursive: true });
+  mkdirSync(path.join(home, ".cursor"), { recursive: true });
+  mkdirSync(path.join(home, ".gemini", "antigravity"), { recursive: true });
+  const jsonEntry = (urlKey, extra = {}) =>
+    `${JSON.stringify({ mcpServers: { lazyweb: { [urlKey]: MCP_URL, headers: { Accept: "application/json, text/event-stream" }, ...extra } } }, null, 2)}\n`;
+  const configs = {
+    // TOML: a header map with no Authorization key, and a commented-out one.
+    [path.join(home, ".codex", "config.toml")]:
+      `[mcp_servers.lazyweb]\nurl = "${MCP_URL}"\nhttp_headers = { Accept = "application/json" }\n# http_headers = { Authorization = "Bearer retired" }\n`,
+    // JSON, in each shape setup reads.
+    [path.join(home, ".cursor", "mcp.json")]: jsonEntry("url"),
+    [path.join(home, ".gemini", "antigravity", "mcp_config.json")]: jsonEntry("serverUrl"),
+    // The word "authorization" inside a value is not an Authorization header.
+    [path.join(home, ".claude.json")]: jsonEntry("url", {
+      type: "http",
+      oauth: { authServerMetadataUrl: "https://lazyweb.example.com/.well-known/oauth-authorization-server" }
+    })
+  };
+  for (const [file, content] of Object.entries(configs)) writeFileSync(file, content);
+
+  try {
+    const result = runSetup(home, fakeBin, ["--email", EMAIL, "--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    for (const [file, content] of Object.entries(configs)) {
+      assert.equal(readFileSync(file, "utf8"), content, `${file} must be untouched`);
+    }
+    assert.equal(existsSync(box.claudeLog), false, "no claude mcp remove/add against a sign-in connection");
+    assert.equal(result.stdout.match(/existing sign-in connection kept/g).length, 4);
+
+    // They are connections, so a no-email run reports them as left unchanged.
+    const noEmail = runSetup(home, fakeBin, ["--quiet"]);
+    assert.equal(noEmail.status, 0, noEmail.stderr || noEmail.stdout);
+    assert.match(noEmail.stdout, /No email was given, so existing MCP connections were not changed\./);
+    for (const [file, content] of Object.entries(configs)) {
+      assert.equal(readFileSync(file, "utf8"), content, `${file} must be untouched`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("setup --email replaces a Codex entry in every form that carries an Authorization header", () => {
+  const forms = {
+    "quoted key": `http_headers = { "Authorization" = "Bearer earlier-identity" }\n`,
+    "sub-table": `\n[mcp_servers.lazyweb.http_headers]\nAuthorization = "Bearer earlier-identity"\n`,
+    "header from the environment": `env_http_headers = { Authorization = "EARLIER_IDENTITY" }\n`,
+    "bearer token key": `bearer_token_env_var = "EARLIER_IDENTITY"\n`
+  };
+  for (const [form, lines] of Object.entries(forms)) {
+    const box = makeSandbox("lazyweb-setup-codex-header-forms-");
+    const { dir, home, fakeBin } = box;
+    mkdirSync(path.join(home, ".codex"), { recursive: true });
+    writeFileSync(path.join(home, ".codex", "config.toml"), `[mcp_servers.lazyweb]\nurl = "${MCP_URL}"\n${lines}`);
+
+    try {
+      const result = runSetupHost(home, fakeBin, "codex", { quiet: true });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.equal(
+        readFileSync(path.join(home, ".codex", "config.toml"), "utf8"),
+        `[mcp_servers.lazyweb]\nurl = "${MCP_URL}"\nhttp_headers = { Authorization = "Bearer ${EMAIL}" }\n`,
+        form
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
 test("setup --email replaces a header-based connection and keeps neighbouring entries", () => {
   const box = makeSandbox("lazyweb-setup-replace-header-");
   const { dir, home, fakeBin } = box;
@@ -382,25 +469,30 @@ test("setup leaves a client config it cannot parse alone and exits non-zero", ()
   }
 });
 
-test("a recorded email lets a later no-email run update skills for a client whose MCP config setup does not write", () => {
+test("a recorded email is not a connection: a later no-email run updates the skills and says how to connect", () => {
   const box = makeSandbox("lazyweb-setup-skills-only-");
   const { dir, home, fakeBin } = box;
   mkdirSync(path.join(home, ".config", "opencode"), { recursive: true });
 
   try {
+    // setup installs skills for OpenCode and does not write its MCP config.
     const first = runSetup(home, fakeBin, ["--email", EMAIL, "--quiet"]);
     assert.equal(first.status, 0, first.stderr || first.stdout);
     assert.match(first.stdout, /OpenCode: skills installed; MCP entry not written \(add it in the OpenCode MCP settings\)/);
+    assert.equal(readFileSync(path.join(home, ".lazyweb", "email"), "utf8"), `${EMAIL}\n`);
 
     const second = runSetup(home, fakeBin, ["--quiet"]);
     assert.equal(second.status, 0, second.stderr || second.stdout);
-    assert.match(second.stdout, /^ {2}OpenCode: skills installed$/m);
+    assert.equal(
+      second.stdout,
+      ["", NOT_CONNECTED, "  OpenCode: skills installed", "Restart your client to load the changes.", ""].join("\n")
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("a skill pack installed by an earlier setup lets a no-email run update skills without touching anything else", () => {
+test("a skill pack installed by an earlier setup is not a connection: a no-email run updates the skills and says how to connect", () => {
   const box = makeSandbox("lazyweb-setup-earlier-install-");
   const { dir, home, fakeBin, curlLog } = box;
   mkdirSync(path.join(home, ".config", "opencode"), { recursive: true });
@@ -410,7 +502,10 @@ test("a skill pack installed by an earlier setup lets a no-email run update skil
   try {
     const result = runSetup(home, fakeBin, ["--quiet"]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.match(result.stdout, /^ {2}OpenCode: skills installed$/m);
+    assert.equal(
+      result.stdout,
+      ["", NOT_CONNECTED, "  OpenCode: skills installed", "Restart your client to load the changes.", ""].join("\n")
+    );
     assert.equal(existsSync(path.join(home, ".lazyweb", "email")), false);
     assert.equal(existsSync(curlLog), false);
   } finally {

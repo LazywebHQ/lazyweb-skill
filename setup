@@ -487,7 +487,8 @@ install_lazyweb_bins() {
 #                                                   (or invalid: not a JSON object)
 #   mcp_config write <codex|json> <path> [url_key]  writes the email entry
 # "signin" is an entry with no Authorization header: a connection the user
-# signed in to (OAuth). setup never replaces one, in any client.
+# signed in to (OAuth). setup never replaces one, in any client. Any other
+# header, such as Accept, leaves a sign-in entry a sign-in entry.
 # "claude" reads every scope in Claude Code's ~/.claude.json. Claude Code
 # entries are written with its own CLI (connect_claude), not here.
 mcp_config() {
@@ -510,6 +511,13 @@ const save = (content) => {
   fs.writeFileSync(CONFIG_PATH, content);
 };
 
+// True when the entry carries an Authorization header: as a key
+// (Authorization = "...", "Authorization": "..."), as a header handed to a
+// stdio bridge ("Authorization: Bearer ..."), or as Codex's bearer_token keys,
+// which send one. The word inside a value, or any other header, does not count.
+const carriesAuthorization = (entryText) =>
+  /\bauthorization["']?\s*[:=]|^\s*bearer_token(_env_var)?\s*=/im.test(entryText);
+
 if (FORMAT === "codex") {
   // Split the TOML into the lazyweb tables ([mcp_servers.lazyweb] and any
   // [mcp_servers.lazyweb.*] sub-table) and everything else.
@@ -523,8 +531,9 @@ if (FORMAT === "codex") {
     (inside ? mine : rest).push(line);
   }
   if (ACTION === "state") {
-    const hasAuth = /authorization|http_headers|bearer_token/i.test(mine.join("\n"));
-    console.log(mine.length === 0 ? "none" : hasAuth ? "other" : "signin");
+    // A commented-out line is not part of the entry.
+    const entryText = mine.filter((line) => !/^\s*#/.test(line)).join("\n");
+    console.log(mine.length === 0 ? "none" : carriesAuthorization(entryText) ? "other" : "signin");
   } else {
     const kept = rest.join("\n").trimEnd();
     const entry = [
@@ -551,7 +560,7 @@ if (FORMAT === "codex") {
       for (const project of Object.values(data.projects || {})) serverMaps.push(project && project.mcpServers);
     }
     const entries = serverMaps.map((servers) => servers && servers.lazyweb).filter(Boolean);
-    const isSignIn = (entry) => !/authorization/i.test(JSON.stringify(entry));
+    const isSignIn = (entry) => !carriesAuthorization(JSON.stringify(entry));
     console.log(entries.length === 0 ? "none" : entries.some(isSignIn) ? "signin" : "other");
   } else {
     if (!data.mcpServers || typeof data.mcpServers !== "object" || Array.isArray(data.mcpServers)) {
@@ -571,11 +580,10 @@ if (FORMAT === "codex") {
 NODE
 }
 
-# True when this machine already has Lazyweb: an MCP entry in any client config
-# setup can read, an email recorded by an earlier `setup --email`, or a skill
-# pack installed by any earlier setup (its VERSION marker). The last two cover
-# clients whose MCP config setup does not write, so a no-email run on any
-# existing install reports its connections as left unchanged.
+# True when a client config setup can read holds a Lazyweb MCP entry. Install
+# markers are not a connection: a no-email run writes ~/.lazyweb/VERSION, and
+# --email records ~/.lazyweb/email even for a client whose MCP config setup
+# does not write.
 connection_exists() {
   local spec
   for spec in \
@@ -589,7 +597,7 @@ connection_exists() {
       signin|other) return 0 ;;
     esac
   done
-  [ -s "$EMAIL_FILE" ] || [ -s "$HOME/.lazyweb/VERSION" ]
+  return 1
 }
 
 # connect_file and connect_claude set MCP_NOTE, the MCP half of a client's
@@ -688,15 +696,6 @@ selected_hosts() {
       ;;
   esac
 }
-
-# No email on a machine with no Lazyweb connection: the skills are installed, no
-# connection is added, and the summary says how to connect. Decided here,
-# before setup writes its own VERSION marker.
-UNCONNECTED=0
-if [ -z "$EMAIL" ] && ! connection_exists; then
-  UNCONNECTED=1
-fi
-NOT_CONNECTED="Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com"
 
 mkdir -p "$HOME/.lazyweb"
 [ -z "$EMAIL" ] || printf '%s\n' "$EMAIL" > "$EMAIL_FILE"
@@ -820,11 +819,14 @@ fi
 rm -f "$HOME/.lazyweb/bin/lazyweb-router" 2>/dev/null || true
 
 # Final summary: what was set up, for which email, and the restart reminder.
+# With no email, setup adds no connection: it reports the existing ones as
+# unchanged, or says how to connect when there are none.
 VERSION_TEXT="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || true)"
+NOT_CONNECTED="Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com"
 echo
 if [ -n "$EMAIL" ]; then
   echo "Lazyweb skill pack ${VERSION_TEXT:-unknown} is set up for $EMAIL."
-elif [ "$UNCONNECTED" -eq 0 ]; then
+elif connection_exists; then
   echo "Lazyweb skill pack ${VERSION_TEXT:-unknown}. No email was given, so existing MCP connections were not changed."
 elif [ -n "$INSTALLED_SKILL_ROOTS" ]; then
   echo "$NOT_CONNECTED"

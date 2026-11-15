@@ -85,14 +85,17 @@ The installer checks for git, clones or updates this repo at
   `~/.lazyweb/email`, writes the Lazyweb MCP entry for each detected client
   with `Authorization: Bearer <email>`, and installs the skills.
 - `setup` with no email installs or updates the skills and adds no connection.
-  An existing Lazyweb MCP connection is left exactly as it is. When none
-  exists, it exits 0 and prints:
+  An existing Lazyweb MCP connection is left exactly as it is. When setup
+  finds no Lazyweb MCP entry in Codex, Claude Code, Cursor or Antigravity, it
+  still exits 0 and prints:
   `Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com`
 - `setup` takes the email from `--email` and nowhere else: not git config, not
   a client's login file, not the environment.
-- `setup` never replaces an existing sign-in (OAuth, header-less) Lazyweb
-  connection with a header-based one, in any client. To sign in instead of
-  sending a header, add the server without one (in Codex:
+- `setup` never replaces an existing sign-in (OAuth) Lazyweb connection with a
+  header-based one, in any client. A connection is header-based only if its
+  entry carries an Authorization header; any other header leaves it a sign-in
+  connection. To sign in instead of sending a header, add the server without
+  one (in Codex:
   `codex mcp add lazyweb --url https://www.lazyweb.com/mcp --oauth-client-registration dcr`).
 - `setup` calls no Lazyweb endpoint. It creates no account and no token, and
   records nothing about how the install happened.

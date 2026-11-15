@@ -94,7 +94,7 @@ test("fetch: happy path merges and dedupes same-company/page references", async 
   ])));
   const out = path.join(dir, "evidence.json");
   const res = await runPy(FETCH, ["--plan", planFile, "--out", out],
-    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_MCP_TOKEN: "tok" });
+    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_EMAIL: "ada@example.com" });
   srv.close();
   assert.equal(res.code, 0, res.out);
   const ev = JSON.parse(readFileSync(out, "utf8"));
@@ -107,14 +107,14 @@ test("fetch: happy path merges and dedupes same-company/page references", async 
   assert.ok(summary.references.every((r) => r.vd.length <= 180 && !("imageUrl" in r)), "summary is compact: truncated vd, no URLs");
 });
 
-test("fetch: missing token exits 2 (fallback signal)", async () => {
+test("fetch: missing email exits 2 (fallback signal)", async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "lw-fetch-"));
   const planFile = path.join(dir, "plan.json");
   writeFileSync(planFile, JSON.stringify(plan([{ id: "q1", tool: "lazyweb_search", args: { query: "x" } }])));
   const res = await runPy(FETCH, ["--plan", planFile, "--out", path.join(dir, "e.json")],
-    { LAZYWEB_MCP_URL: "http://127.0.0.1:1", LAZYWEB_MCP_TOKEN: "", HOME: dir });
+    { LAZYWEB_MCP_URL: "http://127.0.0.1:1", LAZYWEB_EMAIL: "", HOME: dir });
   assert.equal(res.code, 2);
-  assert.match(res.out, /FETCH_FALLBACK: no Lazyweb MCP token/);
+  assert.match(res.out, /FETCH_FALLBACK: no Lazyweb email/);
 });
 
 test("fetch: >50% query failure exits 2 but still writes evidence", async () => {
@@ -131,7 +131,7 @@ test("fetch: >50% query failure exits 2 but still writes evidence", async () => 
   ])));
   const out = path.join(dir, "evidence.json");
   const res = await runPy(FETCH, ["--plan", planFile, "--out", out],
-    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_MCP_TOKEN: "tok" });
+    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_EMAIL: "ada@example.com" });
   srv.close();
   assert.equal(res.code, 2, res.out);
   const ev = JSON.parse(readFileSync(out, "utf8"));
@@ -154,7 +154,7 @@ test("fetch: malformed JSON on one query is a recorded miss, run continues", asy
   ])));
   const out = path.join(dir, "evidence.json");
   const res = await runPy(FETCH, ["--plan", planFile, "--out", out],
-    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_MCP_TOKEN: "tok" });
+    { LAZYWEB_MCP_URL: `http://127.0.0.1:${port}`, LAZYWEB_EMAIL: "ada@example.com" });
   srv.close();
   assert.equal(res.code, 0, res.out);
   const ev = JSON.parse(readFileSync(out, "utf8"));

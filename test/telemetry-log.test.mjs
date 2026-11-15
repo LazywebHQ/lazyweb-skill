@@ -98,6 +98,9 @@ test("prompt secrets are redacted in the query path (not just truncated)", () =>
     const q = readEvents(dir).find((e) => e.event === "query");
     assert.doesNotMatch(q.data.prompt, /abc\.def\.ghi/, "bearer token leaked into the stored prompt");
     assert.match(q.data.prompt, /Bearer \[redacted\]/);
+    feed("query", { session_id: "s5", prompt: "header is Authorization: Bearer ada+work@example.com ok" }, dir);
+    const emailed = readEvents(dir).filter((e) => e.event === "query").pop();
+    assert.equal(emailed.data.prompt, "header is Authorization: Bearer [redacted] ok", "an email bearer must be redacted whole");
     assert.doesNotMatch(q.data.prompt, /sk-proj-ABCDEFGH1234567890/, "api key leaked into the stored prompt");
     assert.match(q.data.prompt, /sk-\[redacted-key\]/);
     assert.match(q.data.prompt, /summarize this/); // ordinary prose preserved

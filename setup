@@ -3,25 +3,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 MCP_URL="${LAZYWEB_MCP_URL:-https://www.lazyweb.com/mcp}"
-INSTALL_TOKEN_URL="${LAZYWEB_INSTALL_TOKEN_URL:-https://www.lazyweb.com/api/mcp/install-token}"
-TOKEN_FILE="${LAZYWEB_TOKEN_FILE:-$HOME/.lazyweb/lazyweb_mcp_token}"
-INSTALL_ID_FILE="${LAZYWEB_INSTALL_ID_FILE:-$HOME/.lazyweb/install_id}"
-INSTALL_COOKIE_FILE="${LAZYWEB_INSTALL_COOKIE_FILE:-$HOME/.lazyweb/install_cookies}"
+# The user's email address is the identifier a local client sends
+# (Authorization: Bearer <email>). It is not a secret, and setup mints nothing.
+EMAIL_FILE="$HOME/.lazyweb/email"
 AUTO_UPDATE_MARKER="${LAZYWEB_AUTO_UPDATE_MARKER:-$HOME/.lazyweb/auto_update}"
+CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
+CLAUDE_JSON="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
 HOST="auto"
 QUIET=0
 AUTO_UPDATE_CHOICE=""
-INSTALL_ATTRIBUTION=0
-INSTALL_EXPERIMENT_TOKEN=""
-INSTALL_USER_GOAL=""
-INSTALL_DISCOVERY_PATH=""
-INSTALL_DISCOVERY_CONTEXT=""
-INSTALL_USER_COMPANY=""
-INSTALL_USER_COMPANY_SET=0
-INSTALL_SUBJECT_PRODUCT_OR_COMPANY=""
-INSTALL_INTENDED_OUTCOME=""
-INSTALL_ALTERNATIVES=()
-INSTALL_JOURNEY_ID=""
+EMAIL=""
 
 # Renamed or purged skill directories from older installs. These must never
 # linger in a client skill root after setup runs, or stale slash commands stay
@@ -68,37 +59,39 @@ INSTALLED_SKILL_ROOTS=""
 
 usage() {
   cat <<'USAGE'
-Usage: ./setup [--host auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity] [--quiet] [--auto-update|--no-auto-update] [--install-attribution --user-goal TEXT --discovery-path SOURCE --discovery-context TEXT --user-company TEXT|unknown --intended-outcome TEXT [--subject-product-or-company TEXT] [--alternative-considered TEXT] [--journey-id UUID]]
+Usage: setup --email you@company.com [--host auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity] [--quiet] [--auto-update|--no-auto-update]
 
-Installs the standalone Lazyweb skill pack and configures direct Lazyweb MCP
-access for supported local coding clients.
+Installs the Lazyweb skills into local coding clients and connects each client
+to the Lazyweb MCP server with "Authorization: Bearer <email>". The email is an
+identifier, not a secret. It is recorded in ~/.lazyweb/email.
+
+Without --email, an existing Lazyweb MCP connection is left exactly as it is
+and only the skills are updated. An existing sign-in (OAuth) connection is
+never replaced, with or without --email.
 
 Flags:
-  --auto-update     Opt in to silent automatic updates (creates
+  --email EMAIL     The email address that identifies you to Lazyweb.
+  --host HOST       Client to set up. auto (the default) is the client that
+                    launched setup, or else every client found on this machine.
+  --quiet           Print only the final summary.
+  --auto-update     Apply future skill updates automatically (creates
                     ~/.lazyweb/auto_update). Skips the interactive prompt.
-  --no-auto-update  Opt out and skip the prompt; updates remain advisory.
-  --install-attribution
-                    Record why this acquisition installation happened.
-  --user-goal TEXT  Concise summary of the original user request.
-  --discovery-path SOURCE
-                    user_request, web_search, reddit, shared_url, llms_txt,
-                    agent_docs, webmcp, other, or unknown.
-  --discovery-context TEXT
-                    Observable evidence explaining how Lazyweb was discovered.
-  --user-company TEXT|unknown
-                    Company or product the user represents, or explicit unknown.
-  --subject-product-or-company TEXT
-                    Optional product or company being researched.
-  --intended-outcome TEXT
-                    What successful Lazyweb use should accomplish.
-  --alternative-considered TEXT
-                    Optional tool or source considered first; repeat up to five.
-  --journey-id UUID Preserve an anonymous Lazyweb journey observed before setup.
+  --no-auto-update  Leave automatic updates off and skip the prompt.
 USAGE
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --email)
+      [ "${2:-}" ] || { echo "Missing value for --email" >&2; exit 1; }
+      EMAIL="$2"
+      shift 2
+      ;;
+    --email=*)
+      EMAIL="${1#--email=}"
+      [ -n "$EMAIL" ] || { echo "Missing value for --email" >&2; exit 1; }
+      shift
+      ;;
     --host)
       [ "${2:-}" ] || { echo "Missing value for --host" >&2; exit 1; }
       HOST="$2"
@@ -120,61 +113,6 @@ while [ "$#" -gt 0 ]; do
       AUTO_UPDATE_CHOICE="off"
       shift
       ;;
-    --install-attribution)
-      INSTALL_ATTRIBUTION=1
-      shift
-      ;;
-    --install-attribution-required)
-      # Legacy no-op: previously rendered installers may still pass this flag.
-      shift
-      ;;
-    --install-experiment-token)
-      [ "${2:-}" ] || { echo "Missing value for --install-experiment-token" >&2; exit 1; }
-      INSTALL_EXPERIMENT_TOKEN="$2"
-      shift 2
-      ;;
-    --user-goal)
-      [ "${2:-}" ] || { echo "Missing value for --user-goal" >&2; exit 1; }
-      INSTALL_USER_GOAL="$2"
-      shift 2
-      ;;
-    --discovery-path)
-      [ "${2:-}" ] || { echo "Missing value for --discovery-path" >&2; exit 1; }
-      INSTALL_DISCOVERY_PATH="$2"
-      shift 2
-      ;;
-    --discovery-context)
-      [ "${2:-}" ] || { echo "Missing value for --discovery-context" >&2; exit 1; }
-      INSTALL_DISCOVERY_CONTEXT="$2"
-      shift 2
-      ;;
-    --user-company)
-      [ "${2:-}" ] || { echo "Missing value for --user-company" >&2; exit 1; }
-      INSTALL_USER_COMPANY="$2"
-      INSTALL_USER_COMPANY_SET=1
-      shift 2
-      ;;
-    --subject-product-or-company)
-      [ "${2:-}" ] || { echo "Missing value for --subject-product-or-company" >&2; exit 1; }
-      INSTALL_SUBJECT_PRODUCT_OR_COMPANY="$2"
-      shift 2
-      ;;
-    --intended-outcome)
-      [ "${2:-}" ] || { echo "Missing value for --intended-outcome" >&2; exit 1; }
-      INSTALL_INTENDED_OUTCOME="$2"
-      shift 2
-      ;;
-    --alternative-considered)
-      [ "${2:-}" ] || { echo "Missing value for --alternative-considered" >&2; exit 1; }
-      [ "${#INSTALL_ALTERNATIVES[@]}" -lt 5 ] || { echo "--alternative-considered accepts at most five values." >&2; exit 1; }
-      INSTALL_ALTERNATIVES+=("$2")
-      shift 2
-      ;;
-    --journey-id)
-      [ "${2:-}" ] || { echo "Missing value for --journey-id" >&2; exit 1; }
-      INSTALL_JOURNEY_ID="$2"
-      shift 2
-      ;;
     -h|--help)
       usage
       exit 0
@@ -187,8 +125,17 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -n "$INSTALL_JOURNEY_ID" ] && ! [[ "$INSTALL_JOURNEY_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
-  echo "Invalid --journey-id: expected UUID." >&2
+case "$HOST" in
+  auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity) ;;
+  *)
+    echo "Unknown --host value: $HOST" >&2
+    exit 1
+    ;;
+esac
+
+EMAIL_SHAPE='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+if [ -n "$EMAIL" ] && ! [[ "$EMAIL" =~ $EMAIL_SHAPE ]]; then
+  echo "Not an email address: $EMAIL" >&2
   exit 1
 fi
 
@@ -198,10 +145,6 @@ log() {
 
 has_cmd() {
   command -v "$1" >/dev/null 2>&1
-}
-
-json_escape() {
-  node -e 'process.stdout.write(JSON.stringify(process.argv[1]))' "$1"
 }
 
 link_or_copy() {
@@ -216,133 +159,6 @@ link_or_copy() {
   else
     cp "$src" "$dst"
   fi
-}
-
-ensure_install_id() {
-  local install_id=""
-  mkdir -p "$(dirname "$INSTALL_ID_FILE")"
-  if [ -s "$INSTALL_ID_FILE" ]; then
-    install_id="$(tr -d '[:space:]' < "$INSTALL_ID_FILE")"
-  fi
-  if ! printf '%s' "$install_id" | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>process.exit(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s)?0:1))"; then
-    install_id="$(node -e "process.stdout.write(require('node:crypto').randomUUID())")"
-    umask 077
-    printf '%s\n' "$install_id" > "$INSTALL_ID_FILE"
-  fi
-  chmod 600 "$INSTALL_ID_FILE" 2>/dev/null || true
-  printf '%s' "$install_id"
-}
-
-prepare_install_cookie_file() {
-  mkdir -p "$(dirname "$INSTALL_COOKIE_FILE")"
-  umask 077
-  touch "$INSTALL_COOKIE_FILE"
-  chmod 600 "$INSTALL_COOKIE_FILE" 2>/dev/null || true
-}
-
-print_install_access_error() {
-  local body="$1"
-  local status="$2"
-  printf '%s' "$body" | node -e '
-    let raw = "";
-    process.stdin.on("data", (chunk) => { raw += chunk; });
-    process.stdin.on("end", () => {
-      const endpoint = process.argv[1];
-      const status = process.argv[2];
-      let payload = null;
-      try { payload = JSON.parse(raw); } catch (_err) {}
-      const message = payload && typeof payload.message === "string"
-        ? payload.message
-        : `Lazyweb MCP setup failed with HTTP ${status}.`;
-      process.stderr.write(`${message}\n`);
-      const upgrade = payload && (payload.upgrade_intent_url || payload.upgrade_url || payload.upgrade_base_url);
-      if (typeof upgrade === "string" && upgrade) {
-        try {
-          process.stderr.write(`Upgrade securely: ${new URL(upgrade, endpoint).toString()}\n`);
-        } catch (_err) {}
-      }
-    });
-  ' "$INSTALL_TOKEN_URL" "$status"
-}
-
-ensure_token() {
-  mkdir -p "$(dirname "$TOKEN_FILE")"
-
-  local existing_token=""
-
-  if [ -n "${LAZYWEB_MCP_TOKEN:-}" ]; then
-    existing_token="$LAZYWEB_MCP_TOKEN"
-  elif [ -s "$TOKEN_FILE" ]; then
-    existing_token="$(tr -d '[:space:]' < "$TOKEN_FILE")"
-  fi
-
-  if [ -n "$existing_token" ]; then
-    printf '%s\n' "$existing_token" > "$TOKEN_FILE"
-    chmod 600 "$TOKEN_FILE" 2>/dev/null || true
-    printf '%s' "$existing_token"
-    return 0
-  fi
-
-  [ "$QUIET" -eq 1 ] || [ -n "$existing_token" ] || printf '%s\n' "Creating a Lazyweb MCP setup credential..." >&2
-  local token response body status install_id journey_id payload user_company_json subject_json alternatives_json
-  install_id="$(ensure_install_id)"
-  prepare_install_cookie_file
-  journey_id="${INSTALL_JOURNEY_ID:-$(node -e "process.stdout.write(require('node:crypto').randomUUID())")}"
-  payload="{\"install_channel\":\"curl\",\"install_id\":$(json_escape "$install_id"),\"journey_id\":$(json_escape "$journey_id"),\"install_experiment_token\":$(json_escape "$INSTALL_EXPERIMENT_TOKEN")}"
-  if [ "$INSTALL_ATTRIBUTION" -eq 1 ]; then
-    case "$INSTALL_USER_COMPANY" in
-      unknown|Unknown|UNKNOWN) user_company_json="null" ;;
-      *) user_company_json="$(json_escape "$INSTALL_USER_COMPANY")" ;;
-    esac
-    if [ -n "$INSTALL_SUBJECT_PRODUCT_OR_COMPANY" ]; then
-      subject_json="$(json_escape "$INSTALL_SUBJECT_PRODUCT_OR_COMPANY")"
-    else
-      subject_json="null"
-    fi
-    alternatives_json="$(node -e 'process.stdout.write(JSON.stringify(process.argv.slice(1)))' "${INSTALL_ALTERNATIVES[@]}")"
-    payload="${payload%?},\"user_goal\":$(json_escape "$INSTALL_USER_GOAL"),\"discovery_path\":$(json_escape "$INSTALL_DISCOVERY_PATH"),\"discovery_context\":$(json_escape "$INSTALL_DISCOVERY_CONTEXT"),\"user_company\":$user_company_json,\"subject_product_or_company\":$subject_json,\"intended_outcome\":$(json_escape "$INSTALL_INTENDED_OUTCOME"),\"alternatives_considered\":$alternatives_json}"
-  fi
-  # install_id rides in the JSON body — that is the server's durable-identity
-  # contract (body-only, never the URL): presenting a known install_id returns
-  # the ORIGINAL user/token instead of minting a fresh identity, so re-runs on
-  # the same machine keep one account even if the token file was lost. The
-  # X-Lazyweb-Install-Id header stays for older deployments that only log it.
-  local -a curl_args=(
-    -sS -X POST "$INSTALL_TOKEN_URL"
-    -H "content-type: application/json"
-    -H "X-Lazyweb-Install-Id: $install_id"
-    -b "$INSTALL_COOKIE_FILE"
-    -c "$INSTALL_COOKIE_FILE"
-    -d "$payload"
-    -w $'\n%{http_code}'
-  )
-  if ! response="$(curl "${curl_args[@]}")"; then
-    echo "Lazyweb MCP setup could not reach $INSTALL_TOKEN_URL. Please retry." >&2
-    exit 1
-  fi
-  chmod 600 "$INSTALL_COOKIE_FILE" 2>/dev/null || true
-  status="${response##*$'\n'}"
-  body="${response%$'\n'*}"
-  case "$status" in
-    2??) ;;
-    *)
-      print_install_access_error "$body" "$status"
-      exit 1
-      ;;
-  esac
-  token="$(printf '%s' "$body" \
-    | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{const j=JSON.parse(s);process.stdout.write(j.token||j.userId||'')}catch(_err){process.exitCode=1}})")"
-  if [ -z "$token" ]; then
-    echo "Lazyweb MCP setup returned no usable token. Please retry." >&2
-    exit 1
-  fi
-  if [ -n "$existing_token" ] && [ "$token" != "$existing_token" ]; then
-    echo "Lazyweb MCP setup returned a different identity for the existing token." >&2
-    exit 1
-  fi
-  printf '%s\n' "$token" > "$TOKEN_FILE"
-  chmod 600 "$TOKEN_FILE" 2>/dev/null || true
-  printf '%s' "$token"
 }
 
 install_skills_to_root() {
@@ -657,105 +473,169 @@ install_lazyweb_bins() {
   done
 }
 
-write_codex_mcp_config() {
-  local token="$1"
-  local config_path="${CODEX_HOME:-$HOME/.codex}/config.toml"
-  mkdir -p "$(dirname "$config_path")"
-  CONFIG_PATH="$config_path" MCP_URL="$MCP_URL" LAZYWEB_CONFIG_TOKEN="$token" node <<'NODE'
+# Reads or writes the "lazyweb" MCP entry in one client config file.
+#   mcp_config state <codex|json|claude> <path>     prints none, signin or other
+#                                                   (or invalid: not a JSON object)
+#   mcp_config write <codex|json> <path> [url_key]  writes the email entry
+# "signin" is an entry with no Authorization header: a connection the user
+# signed in to (OAuth). setup never replaces one, in any client.
+# "claude" reads every scope in Claude Code's ~/.claude.json. Claude Code
+# entries are written with its own CLI (connect_claude), not here.
+mcp_config() {
+  ACTION="$1" FORMAT="$2" CONFIG_PATH="$3" URL_KEY="${4:-url}" MCP_URL="$MCP_URL" EMAIL="$EMAIL" node <<'NODE'
 const fs = require("fs");
 const path = require("path");
 
-const configPath = process.env.CONFIG_PATH;
-const mcpUrl = process.env.MCP_URL;
-const token = process.env.LAZYWEB_CONFIG_TOKEN;
-const block = [
-  "[mcp_servers.lazyweb]",
-  `url = ${JSON.stringify(mcpUrl)}`,
-  `http_headers = { Authorization = ${JSON.stringify(`Bearer ${token}`)} }`,
-  ""
-].join("\n");
+const { ACTION, FORMAT, CONFIG_PATH, URL_KEY, MCP_URL, EMAIL } = process.env;
+const bearer = `Bearer ${EMAIL}`;
 
 let text = "";
 try {
-  text = fs.readFileSync(configPath, "utf8");
+  text = fs.readFileSync(CONFIG_PATH, "utf8");
 } catch (err) {
   if (err.code !== "ENOENT") throw err;
 }
 
-const lines = text.split(/\n/);
-const start = lines.findIndex(line => /^\s*\[mcp_servers\.lazyweb\]\s*$/.test(line));
-if (start !== -1) {
-  const end = lines.findIndex((line, index) => index > start && /^\s*\[[^\]]+\]\s*$/.test(line));
-  const current = lines.slice(start + 1, end === -1 ? undefined : end).join("\n");
-  if (current.includes(`url = ${JSON.stringify(mcpUrl)}`) &&
-      !/^\s*(?:http_headers|bearer_token_env_var)\s*=/m.test(current)) {
-    process.exit(0); // Keep an existing native OAuth connection instead of replacing it with a UUID token.
-  }
-}
-const out = [];
-let skipping = false;
-for (const line of lines) {
-  if (/^\s*\[mcp_servers\.lazyweb\]\s*$/.test(line)) {
-    skipping = true;
-    continue;
-  }
-  if (skipping && /^\s*\[[^\]]+\]\s*$/.test(line)) {
-    skipping = false;
-  }
-  if (!skipping) out.push(line);
-}
-
-const next = out.join("\n").trimEnd();
-fs.mkdirSync(path.dirname(configPath), { recursive: true });
-fs.writeFileSync(configPath, `${next}${next ? "\n\n" : ""}${block}`);
-NODE
-}
-
-write_json_mcp_config() {
-  local config_path="$1"
-  local url_key="$2"
-  local token="$3"
-  mkdir -p "$(dirname "$config_path")"
-  CONFIG_PATH="$config_path" MCP_URL="$MCP_URL" URL_KEY="$url_key" TOKEN="$token" node <<'NODE'
-const fs = require("fs");
-const path = require("path");
-
-const configPath = process.env.CONFIG_PATH;
-const urlKey = process.env.URL_KEY;
-const mcpUrl = process.env.MCP_URL;
-const token = process.env.TOKEN;
-let data = {};
-try {
-  data = JSON.parse(fs.readFileSync(configPath, "utf8"));
-} catch (err) {
-  if (err.code !== "ENOENT") data = {};
-}
-
-if (!data || typeof data !== "object" || Array.isArray(data)) data = {};
-if (!data.mcpServers || typeof data.mcpServers !== "object" || Array.isArray(data.mcpServers)) {
-  data.mcpServers = {};
-}
-data.mcpServers.lazyweb = {
-  [urlKey]: mcpUrl,
-  headers: {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/json, text/event-stream"
-  },
-  disabled: false
+const save = (content) => {
+  fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, content);
 };
-fs.mkdirSync(path.dirname(configPath), { recursive: true });
-fs.writeFileSync(configPath, `${JSON.stringify(data, null, 2)}\n`);
+
+if (FORMAT === "codex") {
+  // Split the TOML into the lazyweb tables ([mcp_servers.lazyweb] and any
+  // [mcp_servers.lazyweb.*] sub-table) and everything else.
+  const mine = [];
+  const rest = [];
+  let inside = false;
+  for (const line of text.split("\n")) {
+    if (/^\s*\[\[?[^\[\]]+\]\]?\s*(#.*)?$/.test(line)) {
+      inside = /^\s*\[mcp_servers\.lazyweb(\.[^\]]+)?\]/.test(line);
+    }
+    (inside ? mine : rest).push(line);
+  }
+  if (ACTION === "state") {
+    const hasAuth = /authorization|http_headers|bearer_token/i.test(mine.join("\n"));
+    console.log(mine.length === 0 ? "none" : hasAuth ? "other" : "signin");
+  } else {
+    const kept = rest.join("\n").trimEnd();
+    const entry = [
+      "[mcp_servers.lazyweb]",
+      `url = ${JSON.stringify(MCP_URL)}`,
+      `http_headers = { Authorization = ${JSON.stringify(bearer)} }`,
+      ""
+    ].join("\n");
+    save(`${kept}${kept ? "\n\n" : ""}${entry}`);
+  }
+} else {
+  let data = null;
+  try {
+    data = text.trim() ? JSON.parse(text) : {};
+  } catch (_err) {}
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    // Not a JSON object. Leave the file alone instead of overwriting it.
+    if (ACTION === "state") console.log("invalid");
+    process.exit(ACTION === "state" ? 0 : 1);
+  }
+  if (ACTION === "state") {
+    const serverMaps = [data.mcpServers];
+    if (FORMAT === "claude") {
+      for (const project of Object.values(data.projects || {})) serverMaps.push(project && project.mcpServers);
+    }
+    const entries = serverMaps.map((servers) => servers && servers.lazyweb).filter(Boolean);
+    const isSignIn = (entry) => !/authorization/i.test(JSON.stringify(entry));
+    console.log(entries.length === 0 ? "none" : entries.some(isSignIn) ? "signin" : "other");
+  } else {
+    if (!data.mcpServers || typeof data.mcpServers !== "object" || Array.isArray(data.mcpServers)) {
+      data.mcpServers = {};
+    }
+    data.mcpServers.lazyweb = {
+      [URL_KEY]: MCP_URL,
+      headers: {
+        Authorization: bearer,
+        Accept: "application/json, text/event-stream"
+      },
+      disabled: false
+    };
+    save(`${JSON.stringify(data, null, 2)}\n`);
+  }
+}
 NODE
 }
 
-configure_claude_mcp() {
-  local token="$1"
+# True when this machine already has a Lazyweb connection: an MCP entry in any
+# client config setup can read, or an email recorded by an earlier
+# `setup --email` (which covers clients whose MCP config setup does not write).
+connection_exists() {
+  local spec
+  for spec in \
+    "codex:$CODEX_DIR/config.toml" \
+    "claude:$CLAUDE_JSON" \
+    "json:$HOME/.cursor/mcp.json" \
+    "json:$HOME/.gemini/antigravity/mcp_config.json" \
+    "json:$HOME/.gemini/antigravity-cli/mcp_config.json" \
+    "json:$HOME/.gemini/antigravity-ide/mcp_config.json"; do
+    case "$(mcp_config state "${spec%%:*}" "${spec#*:}")" in
+      signin|other) return 0 ;;
+    esac
+  done
+  [ -s "$EMAIL_FILE" ]
+}
+
+# connect_file and connect_claude set MCP_NOTE, the MCP half of a client's
+# summary line. They write nothing without --email, and never replace a
+# sign-in connection.
+MCP_NOTE=""
+FAILED=0
+
+connect_file() {
+  local format="$1" config_path="$2" url_key="${3:-url}"
+  MCP_NOTE=""
+  [ -n "$EMAIL" ] || return 0
+  case "$(mcp_config state "$format" "$config_path")" in
+    signin)
+      MCP_NOTE="existing sign-in connection kept"
+      ;;
+    none|other)
+      if mcp_config write "$format" "$config_path" "$url_key"; then
+        MCP_NOTE="MCP entry written to $config_path"
+      else
+        MCP_NOTE="MCP entry NOT written (could not write $config_path)"
+        FAILED=1
+      fi
+      ;;
+    *)
+      MCP_NOTE="MCP entry NOT written ($config_path could not be read)"
+      FAILED=1
+      ;;
+  esac
+}
+
+connect_claude() {
+  MCP_NOTE=""
+  [ -n "$EMAIL" ] || return 0
+  case "$(mcp_config state claude "$CLAUDE_JSON")" in
+    signin)
+      MCP_NOTE="existing sign-in connection kept"
+      return 0
+      ;;
+    none|other) ;;
+    *)
+      MCP_NOTE="MCP entry NOT written ($CLAUDE_JSON could not be read)"
+      FAILED=1
+      return 0
+      ;;
+  esac
   if ! has_cmd claude; then
-    log "Claude Code CLI not found; skipping Claude MCP auto-config."
+    MCP_NOTE="MCP entry not written (claude CLI not found)"
     return 0
   fi
   claude mcp remove -s user lazyweb >/dev/null 2>&1 || true
-  claude mcp add --transport http --scope user lazyweb "$MCP_URL" --header "Authorization: Bearer $token" >/dev/null
+  if claude mcp add --transport http --scope user lazyweb "$MCP_URL" --header "Authorization: Bearer $EMAIL" >/dev/null; then
+    MCP_NOTE="MCP entry added with the claude CLI"
+  else
+    MCP_NOTE="MCP entry NOT written (claude mcp add failed)"
+    FAILED=1
+  fi
 }
 
 selected_hosts() {
@@ -785,7 +665,7 @@ selected_hosts() {
         printf '%s\n' claude
         return
       fi
-      { has_cmd codex || [ -d "$HOME/.codex" ]; } && printf '%s\n' codex
+      { has_cmd codex || [ -d "$CODEX_DIR" ]; } && printf '%s\n' codex
       { has_cmd claude || [ -d "$HOME/.claude" ]; } && printf '%s\n' claude
       { has_cmd cursor || [ -d "$HOME/.cursor" ]; } && printf '%s\n' cursor
       { has_cmd opencode || [ -d "$HOME/.config/opencode" ]; } && printf '%s\n' opencode
@@ -795,74 +675,73 @@ selected_hosts() {
       [ -d "$HOME/.hermes" ] && printf '%s\n' hermes
       { has_cmd antigravity || has_cmd antigravity-cli || [ -d "$HOME/.gemini/antigravity" ] || [ -d "$HOME/.gemini/antigravity-cli" ] || [ -d "$HOME/.gemini/antigravity-ide" ]; } && printf '%s\n' antigravity
       ;;
-    *)
-      echo "Unknown --host value: $HOST" >&2
-      exit 1
-      ;;
   esac
 }
 
-TOKEN="$(ensure_token)"
+if [ -z "$EMAIL" ] && ! connection_exists; then
+  echo "Usage: setup --email you@company.com   (no Lazyweb MCP connection exists on this machine yet)" >&2
+  exit 1
+fi
+
+mkdir -p "$HOME/.lazyweb"
+[ -z "$EMAIL" ] || printf '%s\n' "$EMAIL" > "$EMAIL_FILE"
+
 install_lazyweb_bins
 install_version_marker
 install_integrity_marker
 
-HOSTS="$(selected_hosts | awk '!seen[$0]++' || true)"
-if [ -z "$HOSTS" ]; then
-  printf '%s\n' "No supported local coding clients were detected."
-else
-  for host in $HOSTS; do
-    case "$host" in
-      codex)
-        install_skills_to_root "${CODEX_HOME:-$HOME/.codex}/skills"
-        write_codex_mcp_config "$TOKEN"
-        log "Installed Lazyweb skills and MCP config for Codex."
-        ;;
-      claude)
-        install_skills_to_root "$HOME/.claude/skills"
-        configure_claude_mcp "$TOKEN"
-        log "Installed Lazyweb skills and MCP config for Claude Code."
-        ;;
-      cursor)
-        install_skills_to_root "$HOME/.cursor/skills"
-        write_json_mcp_config "$HOME/.cursor/mcp.json" "url" "$TOKEN"
-        log "Installed Lazyweb skills and MCP config for Cursor."
-        ;;
-      opencode)
-        install_skills_to_root "$HOME/.config/opencode/skills"
-        log "Installed Lazyweb skills for OpenCode. Add the manual MCP config below if OpenCode does not already share an MCP config."
-        ;;
-      kiro)
-        install_skills_to_root "$HOME/.kiro/skills"
-        log "Installed Lazyweb skills for Kiro. Add the manual MCP config below if Kiro does not already share an MCP config."
-        ;;
-      factory)
-        install_skills_to_root "$HOME/.factory/skills"
-        log "Installed Lazyweb skills for Factory Droid. Add the manual MCP config below if Factory does not already share an MCP config."
-        ;;
-      slate)
-        install_skills_to_root "$HOME/.slate/skills"
-        log "Installed Lazyweb skills for Slate. Add the manual MCP config below if Slate does not already share an MCP config."
-        ;;
-      hermes)
-        install_skills_to_root "$HOME/.hermes/skills"
-        log "Installed Lazyweb skills for Hermes. Add the manual MCP config below if Hermes does not already share an MCP config."
-        ;;
-      antigravity)
-        write_json_mcp_config "$HOME/.gemini/antigravity/mcp_config.json" "serverUrl" "$TOKEN"
-        write_json_mcp_config "$HOME/.gemini/antigravity-cli/mcp_config.json" "serverUrl" "$TOKEN"
-        write_json_mcp_config "$HOME/.gemini/antigravity-ide/mcp_config.json" "serverUrl" "$TOKEN"
-        log "Installed Lazyweb MCP config for Antigravity."
-        ;;
-    esac
-  done
+# One line per client for the final summary.
+SUMMARY=""
+note() {
+  SUMMARY="$SUMMARY
+  $*"
+}
 
-  # Assert the prune took across every skill root we touched. A leftover dir is
-  # only a WARNING (printed to stderr) — it must not abort the rest of setup
-  # (MCP config, router, version marker are already done above), so swallow the
-  # non-zero return under `set -e`.
-  verify_prune || true
-fi
+HOSTS="$(selected_hosts | awk '!seen[$0]++' || true)"
+for host in $HOSTS; do
+  case "$host" in
+    codex)
+      install_skills_to_root "$CODEX_DIR/skills"
+      connect_file codex "$CODEX_DIR/config.toml"
+      note "Codex: skills installed${MCP_NOTE:+; $MCP_NOTE}"
+      ;;
+    claude)
+      install_skills_to_root "$HOME/.claude/skills"
+      connect_claude
+      note "Claude Code: skills installed${MCP_NOTE:+; $MCP_NOTE}"
+      ;;
+    cursor)
+      install_skills_to_root "$HOME/.cursor/skills"
+      connect_file json "$HOME/.cursor/mcp.json"
+      note "Cursor: skills installed${MCP_NOTE:+; $MCP_NOTE}"
+      ;;
+    antigravity)
+      # Antigravity has no skills root; setup only manages its MCP entries.
+      [ -n "$EMAIL" ] || note "Antigravity: nothing to update"
+      for variant in antigravity antigravity-cli antigravity-ide; do
+        connect_file json "$HOME/.gemini/$variant/mcp_config.json" serverUrl
+        [ -z "$MCP_NOTE" ] || note "Antigravity: $MCP_NOTE"
+      done
+      ;;
+    *)
+      # setup installs skills for these clients but does not write their MCP config.
+      case "$host" in
+        opencode) label="OpenCode"; skills_root="$HOME/.config/opencode/skills" ;;
+        kiro) label="Kiro"; skills_root="$HOME/.kiro/skills" ;;
+        factory) label="Factory Droid"; skills_root="$HOME/.factory/skills" ;;
+        slate) label="Slate"; skills_root="$HOME/.slate/skills" ;;
+        hermes) label="Hermes"; skills_root="$HOME/.hermes/skills" ;;
+      esac
+      install_skills_to_root "$skills_root"
+      note "$label: skills installed${EMAIL:+; MCP entry not written (add it in the $label MCP settings)}"
+      ;;
+  esac
+done
+
+# Assert the prune took across every skill root we touched. A leftover dir is
+# only a WARNING (printed to stderr) — it must not abort the rest of setup, so
+# swallow the non-zero return under `set -e`.
+verify_prune || true
 
 # Purge remnants of retired distribution channels UNCONDITIONALLY — even when
 # no supported client was detected, stale files must not survive an update:
@@ -925,67 +804,54 @@ RETIRE_ROUTER_EOF
 fi
 rm -f "$HOME/.lazyweb/bin/lazyweb-router" 2>/dev/null || true
 
-cat <<EOF
+# Final summary: what was set up, for which email, and the restart reminder.
+VERSION_TEXT="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || true)"
+echo
+if [ -n "$EMAIL" ]; then
+  echo "Lazyweb skill pack ${VERSION_TEXT:-unknown} is set up for $EMAIL."
+else
+  echo "Lazyweb skill pack ${VERSION_TEXT:-unknown}. No email was given, so existing MCP connections were not changed."
+fi
+if [ -n "$SUMMARY" ]; then
+  printf '%s\n' "${SUMMARY#?}"
+else
+  echo "  No supported local coding client was found, so no skills were installed."
+fi
+if [ -n "$EMAIL" ]; then
+  echo "Any other MCP client: URL $MCP_URL, header \"Authorization: Bearer $EMAIL\"."
+fi
+[ -z "$HOSTS" ] || echo "Restart your client to load the changes."
 
-Lazyweb setup complete.
-
-Welcome to Lazyweb.
-Hey, Ali here through your agent. I am the founder of Lazyweb. Thanks for installing our MCP.
-Lazyweb gives your agent real product screenshots, product flows, and UI patterns before it designs.
-
-Try these first:
-  1. Use /lazyweb to route any Lazyweb product action through the live MCP contract.
-  2. Use /lazyweb-growth-score to get, explicitly generate, or compare website scores.
-  3. Use /lazyweb-growth-report for design improvement feedback on an existing screen or webpage.
-  4. Use /lazyweb-apply-design-best-practices to route a UI craft task to the best specialist skill.
-  5. Use /lazyweb-growth-backlog to list or add product-scoped growth specs.
-  6. Use the screen, flow, and experiment search skills to collect research, then finalize it as one Agentic Search.
-
-Token file:
-  $TOKEN_FILE
-
-Manual MCP config for any unsupported local client:
-  URL: $MCP_URL
-  Transport: Streamable HTTP
-  Header: Authorization: Bearer <token stored in the Token file above>
-
-First checks:
-  1. Reload/restart the client.
-  2. Show the Welcome to Lazyweb message above to the user.
-  3. Confirm /lazyweb and the installed Lazyweb skills are visible.
-  4. List MCP tools. If lazyweb_discover_tools and lazyweb_execute are advertised, use steps 5-6.
-  5. Call lazyweb_discover_tools with {"query":"lazyweb_get_workflows","limit":1} to read the current schema.
-  6. Call lazyweb_execute with {"code":"return await tools.lazyweb_get_workflows({operation:'list',task_context:'first run Lazyweb capabilities'});"} and check the returned result for isError.
-  7. If lazyweb_get_workflows is advertised directly, call it with operation=list and task_context="first run Lazyweb capabilities" instead. Missing individual action names are not a reason to reinstall.
-EOF
-
-# Auto-update opt-in. Resolved explicitly via --auto-update / --no-auto-update,
-# otherwise prompted once interactively. Quiet, non-interactive, and previously
-# answered installs leave the existing marker alone.
+# Automatic updates are opt-in: --auto-update / --no-auto-update decide it,
+# otherwise an interactive terminal is asked once. Quiet, non-interactive, and
+# previously answered runs leave the existing marker alone.
 case "$AUTO_UPDATE_CHOICE" in
   on)
     mkdir -p "$(dirname "$AUTO_UPDATE_MARKER")"
     touch "$AUTO_UPDATE_MARKER"
-    log "Auto-updates enabled. Disable later: rm $AUTO_UPDATE_MARKER"
+    log "Automatic updates enabled. Disable later: rm $AUTO_UPDATE_MARKER"
     ;;
   off)
-    log "Auto-updates left off. Enable later: touch $AUTO_UPDATE_MARKER"
+    log "Automatic updates left off. Enable later: touch $AUTO_UPDATE_MARKER"
     ;;
   *)
     if [ "$QUIET" -eq 0 ] && [ -t 0 ] && [ ! -f "$AUTO_UPDATE_MARKER" ]; then
-      printf '\nEnable auto-updates so future Lazyweb skill changes apply silently? [Y/n] '
+      printf '\nApply future Lazyweb skill updates automatically? [Y/n] '
       if read -r LAZYWEB_AUTO_ANSWER; then
         case "$LAZYWEB_AUTO_ANSWER" in
           n|N|no|No|NO)
-            log "Auto-updates left off. Enable later: touch $AUTO_UPDATE_MARKER"
+            log "Automatic updates left off. Enable later: touch $AUTO_UPDATE_MARKER"
             ;;
           *)
             mkdir -p "$(dirname "$AUTO_UPDATE_MARKER")"
             touch "$AUTO_UPDATE_MARKER"
-            log "Auto-updates enabled. Disable later: rm $AUTO_UPDATE_MARKER"
+            log "Automatic updates enabled. Disable later: rm $AUTO_UPDATE_MARKER"
             ;;
         esac
       fi
     fi
     ;;
 esac
+
+# Non-zero when a requested MCP entry could not be written (see the summary).
+exit "$FAILED"

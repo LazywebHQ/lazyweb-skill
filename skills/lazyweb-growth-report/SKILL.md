@@ -19,8 +19,8 @@ Missing individual names in `tools/list` does not mean MCP is unavailable.
 This is only the new name for `/lazyweb-design`. Report generation, polling,
 iteration, and the hosted report UI do not change.
 
-If Lazyweb MCP is unavailable, run
-`curl -fsSL https://www.lazyweb.com/install.sh | bash`, then call
+If Lazyweb MCP is unavailable, tell the user Lazyweb is not connected and point
+them to https://www.lazyweb.com/mcp-install. Once it is connected, call
 `lazyweb_health`.
 
 Call `lazyweb_growth_report` and follow its live schema. Use `action=start` with

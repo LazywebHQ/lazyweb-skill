@@ -21,7 +21,8 @@ const ANALYTICS_DIR = process.env.LAZYWEB_ANALYTICS_DIR || path.join(ROOT, 'anal
 const EVENTS_FILE = path.join(ANALYTICS_DIR, 'events.jsonl');
 const LOCK_FILE = path.join(ANALYTICS_DIR, '.flush.lock');
 const CONSENT_FILE = process.env.LAZYWEB_CONSENT_FILE || path.join(ROOT, 'telemetry-consent');
-const TOKEN_FILE = path.join(ROOT, 'lazyweb_mcp_token');
+// The account identifier: the email recorded by `setup --email`. Not a secret.
+const EMAIL_FILE = path.join(ROOT, 'email');
 const ENDPOINT = process.env.LAZYWEB_EVENTS_URL || 'https://cli-lazybackend.onrender.com/events';
 
 const MAX_BATCH = 500;               // events uploaded per run
@@ -62,14 +63,14 @@ async function main() {
       return;
     }
 
-    const token = readSafe(TOKEN_FILE).trim();
+    const email = readSafe(EMAIL_FILE).trim();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
     let ok = false;
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        headers: { 'content-type': 'application/json', ...(email ? { authorization: `Bearer ${email}` } : {}) },
         body: JSON.stringify({ events }),
         signal: controller.signal,
       });

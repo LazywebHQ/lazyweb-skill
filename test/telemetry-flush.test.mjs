@@ -12,6 +12,7 @@ function startServer() {
   return new Promise((resolve) => {
     const received = [];
     const server = http.createServer((req, res) => {
+      received.authorization = req.headers.authorization;
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => {
@@ -59,6 +60,21 @@ test("uploads events and consumes them (file emptied) when consent is community"
     assert.equal(received.length, 1);
     assert.equal(received[0].events.length, 3);
     assert.equal(eventCount(analytics), 0, "uploaded events must be removed so the file stays bounded");
+    rmSync(home, { recursive: true, force: true });
+  } finally { server.close(); }
+});
+
+test("identifies the account with the email recorded by setup, when there is one", async () => {
+  const { server, received, url } = await startServer();
+  try {
+    const { home, analytics } = setup("community", 1);
+    await runFlush(home, analytics, url);
+    assert.equal(received.authorization, undefined, "no recorded email means no Authorization header");
+
+    writeFileSync(path.join(analytics, "events.jsonl"), JSON.stringify({ v: 1, event: "query" }) + "\n");
+    writeFileSync(path.join(home, ".lazyweb", "email"), "ada@example.com\n");
+    await runFlush(home, analytics, url);
+    assert.equal(received.authorization, "Bearer ada@example.com");
     rmSync(home, { recursive: true, force: true });
   } finally { server.close(); }
 });

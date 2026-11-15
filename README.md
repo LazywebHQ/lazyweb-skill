@@ -9,44 +9,73 @@ clients that support local skills even when they do not support plugins.
 
 ## Install
 
-Paste this into a local coding agent or terminal:
+Lazyweb is free. Unlike Mobbin, Refero and similar libraries, every account
+gets the whole design library: real app screens, complete product flows and
+real A/B tests. Setup is one step and is built for agents.
+
+A local client identifies its user by sending the user's email address as
+`Authorization: Bearer <email>`. There is no password, key or script.
+
+Claude Code:
 
 ```bash
-curl -fsSL https://www.lazyweb.com/install.sh | bash
+claude mcp add --transport http lazyweb https://www.lazyweb.com/mcp \
+  --header "Authorization: Bearer USER_EMAIL"
 ```
 
-Fresh installs may receive a signed installation-experiment assignment when
-this script is served. Agents can pass the user's actual goal, discovery
-evidence, company, and intended outcome, but missing or invalid attribution
-never blocks installation. The installer never invents those answers. Valid discovery sources are
-`user_request`, `web_search`, `reddit`, `shared_url`, `llms_txt`, `agent_docs`,
-`webmcp`, `other`, and `unknown`. Never include private chain-of-thought.
-When the command came from a tracked Lazyweb agent document, the wrapper also
-passes an internal `--journey-id` so the installation can be joined to the
-public Lazyweb resources that agent fetched first. Valid signed assignments and
-journey context are recorded when available; setup continues without them.
-Existing-token updates never ask for acquisition context again.
+Cursor (`~/.cursor/mcp.json`) and other MCP clients:
 
-The installer clones this repo to `~/.lazyweb/repos/lazyweb-skill`, creates or
-reuses `~/.lazyweb/lazyweb_mcp_token`, installs the visible Lazyweb skills into
-detected local clients, and configures Lazyweb MCP at
-`https://www.lazyweb.com/mcp`.
+```json
+{ "mcpServers": { "lazyweb": {
+    "url": "https://www.lazyweb.com/mcp",
+    "headers": { "Authorization": "Bearer USER_EMAIL" } } } }
+```
 
-Approved private-workspace users should sign in with OAuth on the existing
-`lazyweb` MCP entry. In Codex, run
-`codex mcp add lazyweb --url https://www.lazyweb.com/mcp --oauth-client-registration dcr`
-and verify the account email. Future skill-pack updates preserve that OAuth
-connection instead of replacing it with the public install token.
+Codex (`~/.codex/config.toml`):
 
-When an agent client launches the installer, setup targets that active client
-only. A plain terminal run without an active-client signal still detects local
+```toml
+[mcp_servers.lazyweb]
+url = "https://www.lazyweb.com/mcp"
+http_headers = { Authorization = "Bearer USER_EMAIL" }
+```
+
+Claude.ai, ChatGPT and other hosted apps cannot send a header: add
+`https://www.lazyweb.com/mcp` as a connector and sign in with that email.
+
+Every tool works at once. The first report opens in the browser blurred until
+you enter the code Lazyweb emails you, or open the link in that email. An agent
+can read the report through the tools straight away.
+
+The email is an identifier, not a secret. It cannot make purchases or open
+anything saved in the account; that needs the emailed code.
+
+### The `/lazyweb` skills (optional)
+
+The skill pack adds the `/lazyweb` slash commands to local coding clients:
+
+```bash
+curl -fsSL https://www.lazyweb.com/install.sh | bash -s -- you@company.com
+```
+
+The installer checks for git, clones or updates this repo at
+`~/.lazyweb/repos/lazyweb-skill`, and runs its `setup` with the email:
+
+- `setup --email <email>` checks the shape of the email, records it in
+  `~/.lazyweb/email`, writes the Lazyweb MCP entry for each detected client
+  with `Authorization: Bearer <email>`, and installs the skills.
+- `setup` with no email leaves an existing Lazyweb MCP connection exactly as it
+  is and only updates the skills. When no connection exists, it prints a usage
+  line and exits non-zero.
+- `setup` never replaces an existing sign-in (OAuth, header-less) Lazyweb
+  connection with a header-based one, in any client. To sign in instead of
+  sending a header, add the server without one (in Codex:
+  `codex mcp add lazyweb --url https://www.lazyweb.com/mcp --oauth-client-registration dcr`).
+- `setup` calls no Lazyweb endpoint. It creates no account and no token, and
+  records nothing about how the install happened.
+
+When an agent client launches setup, it targets that active client only. A
+plain terminal run without an active-client signal still detects local
 clients; use `--host all` when you deliberately want every supported client.
-
-Downloading or updating the skill pack, installing or configuring a client,
-and creating or reusing a bearer token are available to everyone without
-charge. Setup, health, and workflow discovery remain usable regardless
-of plan; real data-bearing MCP tool availability and usage limits depend on the
-account's persisted experiment assignment and plan.
 
 Supported local skill roots:
 
@@ -59,10 +88,8 @@ Supported local skill roots:
 - Slate: `~/.slate/skills`
 - Hermes: `~/.hermes/skills`
 
-Direct MCP config is written for Codex, Claude Code, Cursor, and Antigravity.
-For hosted Claude or ChatGPT surfaces, use the connector instructions at
-`https://www.lazyweb.com/claude.md` or `https://www.lazyweb.com/chatgpt.md`;
-a local shell script cannot configure those cloud UIs.
+The MCP entry is written for Codex, Claude Code, Cursor, and Antigravity. For
+the other clients, add it yourself (see Manual Setup).
 
 ## Visible Skills
 
@@ -93,27 +120,21 @@ accomplish with Lazyweb.
 
 ## Verify
 
-After setup, reload or restart the client, then:
+After setup, restart the client. To check the connection:
 
-1. Show the Welcome to Lazyweb message from setup, or fetch `https://www.lazyweb.com/api/mcp/welcome-message` and show it to the user.
-2. List MCP tools. If the client advertises `lazyweb_discover_tools` and `lazyweb_execute`, use the steps below; individual actions do not need to appear in that list.
-3. Call `lazyweb_discover_tools` with `{"query":"lazyweb_get_workflows","limit":1}` to read the current schema, then call `lazyweb_execute` with:
+1. List MCP tools. If the client advertises `lazyweb_discover_tools` and `lazyweb_execute`, use the steps below; individual actions do not need to appear in that list.
+2. Call `lazyweb_discover_tools` with `{"query":"lazyweb_get_workflows","limit":1}` to read the current schema, then call `lazyweb_execute` with:
 
 ```json
 {"code":"return await tools.lazyweb_get_workflows({operation:'list',task_context:'first run Lazyweb capabilities'});"}
 ```
 
-4. Check the returned result for `isError`, then summarize the available workflows. Discover the schema for the user's next action before executing it.
+3. Check the returned result for `isError`, then summarize the available workflows. Discover the schema for the user's next action before executing it.
 
 If the client advertises `lazyweb_get_workflows` directly, call it with `{"operation":"list","task_context":"first run Lazyweb capabilities"}`. Use the tools actually advertised by the client; absent individual action names are not a reason to reinstall.
 
-A Lazyweb MCP token is a bearer setup credential, not proof of paid access.
-Creating or reusing one does not charge the user, but data-bearing tools still
-follow the account's persisted experiment assignment and plan. Tokens do not
-authorize purchases, paid spend, private user data, or destructive actions.
-Keep tokens out of public git, but ignored local MCP config is fine.
-The hosted MCP enforces abuse controls, including per-token transport quotas;
-clients that ignore backoff may receive `429 mcp_rate_limited`.
+The hosted MCP enforces abuse controls, including transport quotas; clients
+that ignore backoff may receive `429 mcp_rate_limited`.
 
 ## Manual Setup
 
@@ -121,18 +142,18 @@ If your client is not detected, configure MCP manually:
 
 - URL: `https://www.lazyweb.com/mcp`
 - Transport: Streamable HTTP
-- Header: `Authorization: Bearer <token from ~/.lazyweb/lazyweb_mcp_token>`
+- Header: `Authorization: Bearer <your email address>`
 
 To run setup for a specific client:
 
 ```bash
-~/.lazyweb/repos/lazyweb-skill/setup --host cursor
+~/.lazyweb/repos/lazyweb-skill/setup --email you@company.com --host cursor
 ```
 
 Use `--host all` to install every supported local skill root.
 
 To update an existing install from GitHub and refresh every supported local
-skill root:
+skill root (this leaves the MCP connection as it is):
 
 ```bash
 ~/.lazyweb/bin/lazyweb-update --host all
@@ -141,8 +162,8 @@ skill root:
 ## Auto-updates (opt-in)
 
 Lazyweb checks for a newer version on every invocation. By default it tells
-the agent to surface the upgrade command to you. To apply updates silently
-without confirmation, opt in once:
+the agent to surface the upgrade command to you. To have updates applied
+without being asked each time, opt in once:
 
 ```bash
 touch ~/.lazyweb/auto_update

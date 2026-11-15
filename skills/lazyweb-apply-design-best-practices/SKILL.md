@@ -94,10 +94,9 @@ connectivity with `lazyweb_health` first, and pass
 `"skill": "apply-design-best-practices"` plus `"version"` (from
 `cat "$HOME/.lazyweb/VERSION" 2>/dev/null || echo 0.0.0`) in every
 `lazyweb_*` call — optional analytics metadata; never drop a real argument
-for it. If Lazyweb MCP is missing or auth fails, tell the user: "Lazyweb MCP
-is not installed. Run `curl -fsSL https://www.lazyweb.com/install.sh | bash`,
-reload this client, then rerun this skill," and continue with the fetched
-skills below.
+for it. If Lazyweb MCP is missing or auth fails, tell the user Lazyweb is not
+connected and point them to https://www.lazyweb.com/mcp-install, then continue
+with the fetched skills below.
 
 ---
 

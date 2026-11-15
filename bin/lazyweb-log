@@ -41,8 +41,8 @@ function redact(value, key, depth) {
     if (key && SECRET_KEYS.test(key)) return '[redacted]';
     // Long base64-ish blob (e.g. an inlined screenshot): drop it, keep its size.
     if (value.length > 512 && /^[A-Za-z0-9+/=\s]+$/.test(value)) return `[redacted:${value.length}b]`;
-    // Inline bearer tokens.
-    let v = value.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
+    // Inline bearer values: a token, or the email address a Lazyweb client sends.
+    let v = value.replace(/Bearer\s+[A-Za-z0-9._%+@-]+/gi, 'Bearer [redacted]');
     // High-confidence API-key shapes (OpenAI sk-, Google AIza, xAI, AWS AKIA, GitHub
     // ghp_/gho_/github_pat_). Keep the prefix, drop the secret. Require >=8 trailing
     // chars so ordinary words like "ask-" or "skill" are never clipped.

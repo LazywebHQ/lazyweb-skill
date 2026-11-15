@@ -30,8 +30,10 @@ Required tools:
 - `lazyweb_health` — verify connectivity when the MCP surface is uncertain
 - `lazyweb_explain_flow` — save the explanatory diagram (returns `explainer_id` + `explainer_url`)
 
-If Lazyweb MCP is missing — or `lazyweb_explain_flow` isn't in the tool list — tell
-the user to run `curl -fsSL https://www.lazyweb.com/install.sh | bash`, reload, rerun.
+If Lazyweb MCP is missing, tell the user Lazyweb is not connected and point them
+to https://www.lazyweb.com/mcp-install. If only `lazyweb_explain_flow` is missing
+from the tool list, the skill pack is out of date: tell the user to run
+`/lazyweb-update` and restart their client.
 
 ### MCP plan responses
 

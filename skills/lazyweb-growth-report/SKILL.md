@@ -27,5 +27,6 @@ Call `lazyweb_growth_report` and follow its live schema. Use `action=start` with
 the unchanged report arguments, then `action=status` with the returned job ID
 until terminal. Pass `skill: "lazyweb-growth-report"` plus VERSION/integrity.
 
-When done, follow the returned `open_hint`: open private `open_url` once in the
-host browser, never print/share/log it, and give the user the stable `url`.
+When done, follow the returned `open_hint`. `open_url` is the user's private
+link to the result: open it once in the host browser. The link to give the user
+is the stable `url`.

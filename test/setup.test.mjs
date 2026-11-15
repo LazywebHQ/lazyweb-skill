@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -54,6 +54,31 @@ function runSetupHost(home, fakeBin, host, { quiet = false } = {}) {
 
 function listFiles(dir) {
   return readdirSync(dir, { recursive: true }).filter((file) => !lstatSync(path.join(dir, file)).isDirectory());
+}
+
+// The text of every file under dir, by relative path. Skill directories are
+// symlinks back into the repo and are skipped.
+function readTree(dir) {
+  const tree = new Map();
+  for (const file of listFiles(dir)) {
+    const full = path.join(dir, file);
+    if (!statSync(full).isDirectory()) tree.set(file, readFileSync(full, "utf8"));
+  }
+  return tree;
+}
+
+// What setup prints when no email is given on a machine with no Lazyweb connection.
+const NOT_CONNECTED =
+  "Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com";
+
+// No Lazyweb connection of any kind: no client MCP entry, no claude CLI call,
+// no recorded email and no network call.
+function assertNoConnection({ home, claudeLog, curlLog }) {
+  for (const file of [".codex/config.toml", ".cursor/mcp.json", ".claude.json", ".gemini", ".lazyweb/email"]) {
+    assert.equal(existsSync(path.join(home, file)), false, `${file} must not be created`);
+  }
+  assert.equal(existsSync(claudeLog), false, "the claude CLI must not be invoked");
+  assert.equal(existsSync(curlLog), false, "setup must not make a network call");
 }
 
 const HEADER_CODEX = `model = "gpt-5.4"\n\n[mcp_servers.lazyweb]\nurl = "${MCP_URL}"\nhttp_headers = { Authorization = "Bearer earlier-identity" }\n`;
@@ -110,7 +135,7 @@ test("setup --email records the email and connects each detected client with it"
         "  Codex: skills installed; MCP entry written to ~/.codex/config.toml",
         "  Claude Code: skills installed; MCP entry added with the claude CLI",
         "  Cursor: skills installed; MCP entry written to ~/.cursor/mcp.json",
-        `Any other MCP client: URL ${MCP_URL}, header "Authorization: Bearer ${EMAIL}".`,
+        `Any other MCP client: URL ${MCP_URL} with the header "Authorization: Bearer ${EMAIL}".`,
         "Restart your client to load the changes.",
         "Automatic updates left off. Enable later: touch ~/.lazyweb/auto_update",
         ""
@@ -122,7 +147,7 @@ test("setup --email records the email and connects each detected client with it"
   }
 });
 
-test("setup with no email and no Lazyweb connection prints one usage line and writes nothing", () => {
+test("setup with no email and no Lazyweb connection installs the skills, adds no connection and says how to connect", () => {
   const box = makeSandbox("lazyweb-setup-no-email-");
   const { dir, home, fakeBin } = box;
   addClaudeCli(box);
@@ -130,13 +155,97 @@ test("setup with no email and no Lazyweb connection prints one usage line and wr
   mkdirSync(path.join(home, ".cursor"), { recursive: true });
 
   try {
-    const result = runSetup(home, fakeBin, ["--no-auto-update"]);
-    assert.notEqual(result.status, 0);
-    assert.equal(result.stdout, "");
-    assert.match(result.stderr, /^Usage: setup --email you@company\.com[^\n]*\n$/);
-    assert.deepEqual(listFiles(home), [], "nothing may be written");
-    assert.equal(existsSync(box.claudeLog), false);
-    assert.equal(existsSync(box.curlLog), false);
+    const result = runSetup(home, fakeBin, ["--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(
+      result.stdout,
+      [
+        "",
+        NOT_CONNECTED,
+        "  Codex: skills installed",
+        "  Claude Code: skills installed",
+        "  Cursor: skills installed",
+        "Restart your client to load the changes.",
+        ""
+      ].join("\n")
+    );
+    for (const client of [".codex", ".claude", ".cursor"]) {
+      assert.ok(existsSync(path.join(home, client, "skills", "lazyweb-update", "SKILL.md")), `${client} skills must be installed`);
+    }
+    assertNoConnection(box);
+
+    // A second run finds the skill pack from the first one. It still adds no connection.
+    const again = runSetup(home, fakeBin, ["--quiet"]);
+    assert.equal(again.status, 0, again.stderr || again.stdout);
+    assertNoConnection(box);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("setup with no email, no Lazyweb connection and no local client says so and exits 0", () => {
+  const box = makeSandbox("lazyweb-setup-no-email-no-client-");
+  const { dir, home, fakeBin } = box;
+
+  try {
+    const result = runSetup(home, fakeBin, ["--quiet"]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(
+      result.stdout,
+      [
+        "",
+        NOT_CONNECTED.replace("Lazyweb skills are installed. ", ""),
+        "  No supported local coding client was found, so no skills were installed.",
+        ""
+      ].join("\n")
+    );
+    assertNoConnection(box);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("setup takes an email only from --email: not git config, a client login file or the environment", () => {
+  // The only places an email is read or recorded are --email and ~/.lazyweb/email.
+  assert.doesNotMatch(readFileSync(setup, "utf8"), /user\.email|cli-config|authInfo|oauthAccount|auth\.json/);
+
+  const box = makeSandbox("lazyweb-setup-email-sources-");
+  const { dir, home, fakeBin } = box;
+  addClaudeCli(box);
+  const gitEmail = "git-user@example.org";
+  const loginEmail = "cursor-login@example.org";
+  const envEmail = "env-user@example.org";
+  mkdirSync(path.join(home, ".cursor"), { recursive: true });
+  writeFileSync(path.join(home, ".gitconfig"), `[user]\n\tname = Ada\n\temail = ${gitEmail}\n`);
+  writeFileSync(path.join(home, ".cursor", "cli-config.json"), `${JSON.stringify({ authInfo: { email: loginEmail } }, null, 2)}\n`);
+
+  try {
+    // git resolves the address from this HOME, so a lookup by setup would find it.
+    const git = spawnSync("git", ["config", "--global", "user.email"], {
+      cwd: home,
+      encoding: "utf8",
+      env: { HOME: home, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" }
+    });
+    assert.equal(git.stdout.trim(), gitEmail);
+
+    const before = readTree(home);
+    const result = runSetup(home, fakeBin, ["--host", "all", "--quiet"], {
+      EMAIL: envEmail,
+      GIT_AUTHOR_EMAIL: envEmail,
+      GIT_COMMITTER_EMAIL: envEmail
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.ok(result.stdout.includes(NOT_CONNECTED), result.stdout);
+    assertNoConnection(box);
+
+    const written = [...readTree(home)].filter(([file, text]) => before.get(file) !== text);
+    assert.ok(written.some(([file]) => file === path.join(".cursor", "skills", "lazyweb", "SKILL.md")), "the skills must be installed");
+    for (const address of [gitEmail, loginEmail, envEmail]) {
+      for (const [file, text] of written) {
+        assert.equal(text.includes(address), false, `${address} must not be written to ${file}`);
+      }
+      assert.equal(`${result.stdout}${result.stderr}`.includes(address), false, `${address} must not be printed`);
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -941,7 +1050,7 @@ test("setup reports manual MCP config when no local clients are detected", () =>
     const result = runSetup(home, fakeBin);
     assert.equal(result.status, 0, result.stderr || result.stdout);
     assert.match(result.stdout, /No supported local coding client was found, so no skills were installed\./);
-    assert.match(result.stdout, /Any other MCP client: URL https:\/\/lazyweb\.example\.com\/mcp, header "Authorization: Bearer ada@example\.com"\./);
+    assert.match(result.stdout, /Any other MCP client: URL https:\/\/lazyweb\.example\.com\/mcp with the header "Authorization: Bearer ada@example\.com"\./);
     assert.doesNotMatch(result.stdout, /Restart your client/);
   } finally {
     rmSync(dir, { recursive: true, force: true });

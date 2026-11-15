@@ -5,6 +5,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 MCP_URL="${LAZYWEB_MCP_URL:-https://www.lazyweb.com/mcp}"
 # The user's email address is the identifier a local client sends
 # (Authorization: Bearer <email>). It is not a secret, and setup mints nothing.
+# setup takes the address from --email and nowhere else: not git config, not a
+# client's login file, not the environment. ~/.lazyweb/email is setup's own
+# record of the address it was given.
 EMAIL_FILE="$HOME/.lazyweb/email"
 AUTO_UPDATE_MARKER="${LAZYWEB_AUTO_UPDATE_MARKER:-$HOME/.lazyweb/auto_update}"
 CODEX_DIR="${CODEX_HOME:-$HOME/.codex}"
@@ -59,18 +62,24 @@ INSTALLED_SKILL_ROOTS=""
 
 usage() {
   cat <<'USAGE'
-Usage: setup --email you@company.com [--host auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity] [--quiet] [--auto-update|--no-auto-update]
+Usage: setup [--email you@company.com] [--host auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity] [--quiet] [--auto-update|--no-auto-update]
 
-Installs the Lazyweb skills into local coding clients and connects each client
-to the Lazyweb MCP server with "Authorization: Bearer <email>". The email is an
-identifier, not a secret. It is recorded in ~/.lazyweb/email.
+Installs the Lazyweb skills into local coding clients. With --email it also
+connects each client to the Lazyweb MCP server with
+"Authorization: Bearer <email>". The email is an identifier, not a secret. It
+is recorded in ~/.lazyweb/email.
 
-Without --email, an existing Lazyweb MCP connection is left exactly as it is
-and only the skills are updated. An existing sign-in (OAuth) connection is
-never replaced, with or without --email.
+Without --email, setup installs or updates the skills and adds no connection.
+An existing Lazyweb MCP connection is left exactly as it is. An existing
+sign-in (OAuth) connection is never replaced, with or without --email.
+
+setup takes the email from --email and nowhere else: not git config, not a
+client's login file, not the environment.
+
+For agents: Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.
 
 Flags:
-  --email EMAIL     The email address that identifies you to Lazyweb.
+  --email EMAIL     The email address the user chooses for Lazyweb.
   --host HOST       Client to set up. auto (the default) is the client that
                     launched setup, or else every client found on this machine.
   --quiet           Print only the final summary.
@@ -565,8 +574,8 @@ NODE
 # True when this machine already has Lazyweb: an MCP entry in any client config
 # setup can read, an email recorded by an earlier `setup --email`, or a skill
 # pack installed by any earlier setup (its VERSION marker). The last two cover
-# clients whose MCP config setup does not write, so a no-email run stays a plain
-# skills update for every existing install.
+# clients whose MCP config setup does not write, so a no-email run on any
+# existing install reports its connections as left unchanged.
 connection_exists() {
   local spec
   for spec in \
@@ -680,10 +689,14 @@ selected_hosts() {
   esac
 }
 
+# No email on a machine with no Lazyweb connection: the skills are installed, no
+# connection is added, and the summary says how to connect. Decided here,
+# before setup writes its own VERSION marker.
+UNCONNECTED=0
 if [ -z "$EMAIL" ] && ! connection_exists; then
-  echo "Usage: setup --email you@company.com   (Lazyweb is not set up on this machine yet)" >&2
-  exit 1
+  UNCONNECTED=1
 fi
+NOT_CONNECTED="Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com"
 
 mkdir -p "$HOME/.lazyweb"
 [ -z "$EMAIL" ] || printf '%s\n' "$EMAIL" > "$EMAIL_FILE"
@@ -811,8 +824,13 @@ VERSION_TEXT="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || true)"
 echo
 if [ -n "$EMAIL" ]; then
   echo "Lazyweb skill pack ${VERSION_TEXT:-unknown} is set up for $EMAIL."
-else
+elif [ "$UNCONNECTED" -eq 0 ]; then
   echo "Lazyweb skill pack ${VERSION_TEXT:-unknown}. No email was given, so existing MCP connections were not changed."
+elif [ -n "$INSTALLED_SKILL_ROOTS" ]; then
+  echo "$NOT_CONNECTED"
+else
+  # No client took the skills, so the first sentence is left out.
+  echo "${NOT_CONNECTED#Lazyweb skills are installed. }"
 fi
 if [ -n "$SUMMARY" ]; then
   printf '%s\n' "${SUMMARY#?}"
@@ -820,7 +838,7 @@ else
   echo "  No supported local coding client was found, so no skills were installed."
 fi
 if [ -n "$EMAIL" ]; then
-  echo "Any other MCP client: URL $MCP_URL, header \"Authorization: Bearer $EMAIL\"."
+  echo "Any other MCP client: URL $MCP_URL with the header \"Authorization: Bearer $EMAIL\"."
 fi
 [ -z "$HOSTS" ] || echo "Restart your client to load the changes."
 

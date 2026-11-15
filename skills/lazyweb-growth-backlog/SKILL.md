@@ -27,5 +27,5 @@ idempotency key; pass optional surface and `result_ref` evidence unchanged.
 Do not invent an impact estimate, visible recommendation number, or visual
 asset. Pass `skill: "lazyweb-growth-backlog"` plus VERSION/integrity.
 
-Return the stable `url`. If `open_url` exists, open it once in the host browser
-without printing, sharing, or logging it.
+Return the stable `url`. If `open_url` exists, it is the user's private link to
+the result: open it once in the host browser.

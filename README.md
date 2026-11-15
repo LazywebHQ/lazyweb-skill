@@ -14,21 +14,21 @@ gets the whole design library: real app screens, complete product flows and
 real A/B tests. Setup is one step and is built for agents.
 
 A local client identifies its user by sending the user's email address as
-`Authorization: Bearer <email>`. There is no password, key or script.
+`Authorization: Bearer <email>`.
+
+For agents: setup steps, for when your user asks for Lazyweb or for design or growth research.
+
+Step 0: If Lazyweb tools are already listed in your client, you are set up.
+
+Step 1: Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.
+
+Step 2: Connect with that email. There is no password, key or script.
 
 Claude Code:
 
 ```bash
-claude mcp add --transport http lazyweb https://www.lazyweb.com/mcp \
+claude mcp add --transport http --scope user lazyweb https://www.lazyweb.com/mcp \
   --header "Authorization: Bearer USER_EMAIL"
-```
-
-Cursor (`~/.cursor/mcp.json`) and other MCP clients:
-
-```json
-{ "mcpServers": { "lazyweb": {
-    "url": "https://www.lazyweb.com/mcp",
-    "headers": { "Authorization": "Bearer USER_EMAIL" } } } }
 ```
 
 Codex (`~/.codex/config.toml`):
@@ -39,8 +39,29 @@ url = "https://www.lazyweb.com/mcp"
 http_headers = { Authorization = "Bearer USER_EMAIL" }
 ```
 
-Claude.ai, ChatGPT and other hosted apps cannot send a header: add
-`https://www.lazyweb.com/mcp` as a connector and sign in with that email.
+Cursor (`~/.cursor/mcp.json`):
+
+```json
+{ "mcpServers": { "lazyweb": {
+    "url": "https://www.lazyweb.com/mcp",
+    "headers": { "Authorization": "Bearer USER_EMAIL" } } } }
+```
+
+Gemini CLI:
+
+```bash
+gemini mcp add --transport http --scope user lazyweb https://www.lazyweb.com/mcp \
+  --header "Authorization: Bearer USER_EMAIL"
+```
+
+Any other MCP client: URL `https://www.lazyweb.com/mcp` with the header
+`Authorization: Bearer USER_EMAIL`.
+
+ChatGPT, Claude.ai and other hosted apps cannot send a header. Your user adds
+`https://www.lazyweb.com/mcp` as a connector there and signs in with that
+email.
+
+If your user cannot be asked right now, connect without an account: https://design.lazyweb.com/agents/mcp/public (no header). It searches Lazyweb's published research. The whole library opens once your user gives an email.
 
 Every tool works at once. The first report opens in the browser blurred until
 you enter the code Lazyweb emails you, or open the link in that email. An agent
@@ -49,9 +70,9 @@ can read the report through the tools straight away.
 The email is an identifier, not a secret. It cannot make purchases or open
 anything saved in the account; that needs the emailed code.
 
-### The `/lazyweb` skills (optional)
+### The `/lazyweb` skills
 
-The skill pack adds the `/lazyweb` slash commands to local coding clients:
+Optional, for people who want the /lazyweb skills. An agent does not need it: step 2 is the whole setup.
 
 ```bash
 curl -fsSL https://www.lazyweb.com/install.sh | bash -s -- you@company.com
@@ -63,9 +84,12 @@ The installer checks for git, clones or updates this repo at
 - `setup --email <email>` checks the shape of the email, records it in
   `~/.lazyweb/email`, writes the Lazyweb MCP entry for each detected client
   with `Authorization: Bearer <email>`, and installs the skills.
-- `setup` with no email leaves an existing Lazyweb MCP connection exactly as it
-  is and only updates the skills. When no connection exists, it prints a usage
-  line and exits non-zero.
+- `setup` with no email installs or updates the skills and adds no connection.
+  An existing Lazyweb MCP connection is left exactly as it is. When none
+  exists, it exits 0 and prints:
+  `Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com`
+- `setup` takes the email from `--email` and nowhere else: not git config, not
+  a client's login file, not the environment.
 - `setup` never replaces an existing sign-in (OAuth, header-less) Lazyweb
   connection with a header-based one, in any client. To sign in instead of
   sending a header, add the server without one (in Codex:

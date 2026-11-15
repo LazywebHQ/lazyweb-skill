@@ -28,6 +28,6 @@ Never turn a read, page open, or version mismatch into a regrade.
 Pass `skill: "lazyweb-growth-score"` plus the installed VERSION/integrity tags.
 Do not reproduce scoring rules in the skill.
 
-On success, open `open_url` only when provided and only through the host browser;
-never expose it. Return the stable `url` to the user and include `share_url` when
-present.
+On success, `open_url`, when provided, is the user's private link to the result:
+open it once in the host browser. The link to give the user is the stable `url`,
+with `share_url` when present.

@@ -99,9 +99,20 @@ fi
 "$TARGET/setup" --host all --quiet
 ```
 
-If setup prints `Usage: setup --email ...` instead of a summary, no Lazyweb MCP
-connection exists on this machine. Tell the user Lazyweb is not connected and
-point them to https://www.lazyweb.com/mcp-install.
+The updater never adds a Lazyweb connection. If setup's summary says
+`No Lazyweb connection was added, because no email was given`, the skills are
+installed and this machine has no Lazyweb connection. Tell the user Lazyweb is
+not connected. To connect it:
+
+Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.
+
+Then run setup again with that address:
+
+```bash
+"$HOME/.lazyweb/repos/lazyweb-skill/setup" --email USER_EMAIL
+```
+
+The steps for each client are at https://www.lazyweb.com/mcp-install.
 
 ## Verify
 

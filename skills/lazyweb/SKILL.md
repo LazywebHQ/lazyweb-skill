@@ -47,7 +47,8 @@ action from the page's `Share` button. Never return an Agentic Search
 use a Growth Report when it best serves the user's goal; do not require the
 exact product name.
 
-Every successful action returns `lazyweb.resource-link.v1`. Open `open_url`
-once in the host's browser (Codex preview in Codex, Claude browser in Claude,
-otherwise the system browser), but never print, share, or log it. Give the user
-the stable `url` and, for non-Agentic resources, any optional `share_url`.
+Every successful action returns `lazyweb.resource-link.v1`. `open_url` is the
+user's private link to the result: open it once in the host's browser (Codex
+preview in Codex, Claude browser in Claude, otherwise the system browser). The
+link to give the user is the stable `url` and, for non-Agentic resources, any
+optional `share_url`.

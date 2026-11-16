@@ -122,6 +122,18 @@ while [ "$#" -gt 0 ]; do
       AUTO_UPDATE_CHOICE="off"
       shift
       ;;
+    # The installer published before setup took --email passes these flags,
+    # and agents append the attribution ones to it. setup accepts and ignores
+    # them, each with the value it took before, so that installer still
+    # completes as a run with no email. Remove these two cases once no
+    # installer passes them.
+    --install-attribution|--install-attribution-required)
+      shift
+      ;;
+    --install-experiment-token|--journey-id|--user-goal|--discovery-path|--discovery-context|--user-company|--subject-product-or-company|--intended-outcome|--alternative-considered)
+      shift
+      [ "$#" -eq 0 ] || shift
+      ;;
     -h|--help)
       usage
       exit 0

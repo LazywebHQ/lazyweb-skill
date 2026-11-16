@@ -209,61 +209,69 @@ const PREVIOUS_INSTALLER = path.join(root, "test", "fixtures", "previous-install
 const PREVIOUS_EXPERIMENT_TOKEN = "placeholder-experiment-token";
 const PREVIOUS_JOURNEY_ID = "00000000-0000-4000-8000-000000000000";
 
-test("the installer from before --email still installs the skills with this setup, and connects and mints nothing", () => {
-  const box = makeSandbox("lazyweb-setup-previous-installer-");
-  const { dir, home, fakeBin } = box;
-  addClaudeCli(box);
-  mkdirSync(path.join(home, ".codex"), { recursive: true });
-  mkdirSync(path.join(home, ".cursor"), { recursive: true });
+// Runs that installer as `curl -fsSL https://www.lazyweb.com/install.sh | bash
+// -s -- <args>` in the sandbox. It clones this working tree, committed to a
+// local repository; git reads no system or user config and may use only local
+// paths.
+function runPreviousInstaller({ dir, home, fakeBin }, args) {
   const installer = readFileSync(PREVIOUS_INSTALLER, "utf8");
   assert.ok(installer.includes(PREVIOUS_EXPERIMENT_TOKEN) && installer.includes(PREVIOUS_JOURNEY_ID));
-  // git reads no system or user config and may use only local paths.
   const env = {
     HOME: home,
     PATH: `${fakeBin}:/usr/bin:/bin:/usr/sbin:/sbin`,
     CODEX_HOME: path.join(home, ".codex"),
+    LAZYWEB_MCP_URL: MCP_URL,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_ALLOW_PROTOCOL: "file"
   };
-
-  // The installer clones this working tree, committed to a local repository.
   const repo = path.join(dir, "repo");
   cpSync(root, repo, { recursive: true, filter: (src) => path.basename(src) !== ".git" });
-  for (const args of [
+  for (const gitArgs of [
     ["init", "-q"],
     ["add", "-A"],
     ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "--no-gpg-sign", "-m", "snapshot"]
   ]) {
-    const git = spawnSync("git", ["-C", repo, ...args], { encoding: "utf8", env });
+    const git = spawnSync("git", ["-C", repo, ...gitArgs], { encoding: "utf8", env });
     assert.equal(git.status, 0, git.stderr);
   }
+  const result = spawnSync("bash", ["-s", "--", ...args], {
+    cwd: dir,
+    encoding: "utf8",
+    input: installer,
+    env: { ...env, LAZYWEB_SKILL_REPO: repo }
+  });
+  assert.ok(existsSync(path.join(home, ".lazyweb", "repos", "lazyweb-skill", "setup")), "the installer must clone the skill pack");
+  return result;
+}
 
-  // What an agent appends when that installer asks for attribution, and the
-  // flag older installers passed. With the installer's own flags, setup
-  // receives every flag it accepted before --email existed.
-  const agentArgs = [
-    "--install-attribution-required",
-    "--user-goal", "Improve our onboarding",
-    "--discovery-path", "web_search",
-    "--discovery-context", "A search result for onboarding examples",
-    "--user-company", "unknown",
-    "--subject-product-or-company", "Example Co",
-    "--intended-outcome", "Choose a design direction",
-    "--alternative-considered", "Screenshots",
-    "--alternative-considered", "Design galleries"
-  ];
+// setup makes no network call. The only curl call is the installer's own
+// welcome-message request after setup, which the shim fails.
+const PREVIOUS_INSTALLER_CURL_LOG = "-fsSL https://www.lazyweb.com/api/mcp/welcome-message\n";
+const MINTED_FILES = [".lazyweb/lazyweb_mcp_token", ".lazyweb/install_id", ".lazyweb/install_cookies"];
+
+test("the installer from before --email still installs the skills with this setup, and connects and mints nothing", () => {
+  const box = makeSandbox("lazyweb-setup-previous-installer-");
+  const { dir, home } = box;
+  addClaudeCli(box);
+  mkdirSync(path.join(home, ".codex"), { recursive: true });
+  mkdirSync(path.join(home, ".cursor"), { recursive: true });
 
   try {
-    // As `curl -fsSL https://www.lazyweb.com/install.sh | bash -s -- <args>`.
-    const result = spawnSync("bash", ["-s", "--", ...agentArgs], {
-      cwd: dir,
-      encoding: "utf8",
-      input: installer,
-      env: { ...env, LAZYWEB_SKILL_REPO: repo }
-    });
+    // What an agent appends when that installer asks for attribution, and the
+    // flag older installers passed. With the installer's own flags, setup
+    // receives every flag it accepted before --email existed.
+    const result = runPreviousInstaller(box, [
+      "--install-attribution-required",
+      "--user-goal", "Improve our onboarding",
+      "--discovery-path", "web_search",
+      "--discovery-context", "A search result for onboarding examples",
+      "--user-company", "unknown",
+      "--subject-product-or-company", "Example Co",
+      "--intended-outcome", "Choose a design direction",
+      "--alternative-considered", "Screenshots",
+      "--alternative-considered", "Design galleries"
+    ]);
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    const checkout = path.join(home, ".lazyweb", "repos", "lazyweb-skill");
-    assert.ok(existsSync(path.join(checkout, "setup")), "the installer must clone the skill pack");
 
     // A run with no email: skills installed, no connection added.
     const summary = ["", NOT_CONNECTED, "  Codex: skills installed", "  Claude Code: skills installed", "  Cursor: skills installed", "Restart your client to load the changes.", ""];
@@ -271,27 +279,78 @@ test("the installer from before --email still installs the skills with this setu
     for (const client of [".codex", ".claude", ".cursor"]) {
       assert.ok(existsSync(path.join(home, client, "skills", "lazyweb-update", "SKILL.md")), `${client} skills must be installed`);
     }
-    for (const file of [".codex/config.toml", ".cursor/mcp.json", ".claude.json", ".lazyweb/email", ".lazyweb/lazyweb_mcp_token", ".lazyweb/install_id", ".lazyweb/install_cookies"]) {
+    for (const file of [".codex/config.toml", ".cursor/mcp.json", ".claude.json", ".lazyweb/email", ...MINTED_FILES]) {
       assert.equal(existsSync(path.join(home, file)), false, `${file} must not be created`);
     }
     assert.equal(existsSync(box.claudeLog), false, "the claude CLI must not be invoked");
 
     // No file setup wrote holds the experiment token, the journey ID or a bearer header.
-    const checkoutReal = realpathSync(checkout);
+    const checkout = realpathSync(path.join(home, ".lazyweb", "repos", "lazyweb-skill"));
     for (const file of listFiles(home)) {
       const full = realpathSync(path.join(home, file));
-      if (full.startsWith(checkoutReal + path.sep) || statSync(full).isDirectory()) continue;
+      if (full.startsWith(checkout + path.sep) || statSync(full).isDirectory()) continue;
       const text = readFileSync(full, "utf8");
       for (const value of [PREVIOUS_EXPERIMENT_TOKEN, PREVIOUS_JOURNEY_ID, "Bearer"]) {
         assert.ok(!text.includes(value), `${file} must not contain ${value}`);
       }
     }
-
-    // setup makes no network call. The only curl call is the installer's own
-    // welcome-message request after setup, which the shim fails.
-    assert.equal(readFileSync(box.curlLog, "utf8"), "-fsSL https://www.lazyweb.com/api/mcp/welcome-message\n");
+    assert.equal(readFileSync(box.curlLog, "utf8"), PREVIOUS_INSTALLER_CURL_LOG);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the installer from before --email, given an address, connects with it exactly as setup --email does", () => {
+  const viaInstaller = makeSandbox("lazyweb-setup-previous-installer-email-");
+  const direct = makeSandbox("lazyweb-setup-direct-email-");
+  for (const box of [viaInstaller, direct]) {
+    addClaudeCli(box);
+    mkdirSync(path.join(box.home, ".codex"), { recursive: true });
+    mkdirSync(path.join(box.home, ".cursor"), { recursive: true });
+  }
+
+  try {
+    // That installer passes the address on as a bare argument after its own flags.
+    const result = runPreviousInstaller(viaInstaller, [EMAIL]);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const reference = runSetup(direct.home, direct.fakeBin, ["--email", EMAIL, "--host", "auto"]);
+    assert.equal(reference.status, 0, reference.stderr || reference.stdout);
+
+    const connection = ({ home, claudeLog }) => [
+      readFileSync(path.join(home, ".codex", "config.toml"), "utf8"),
+      readFileSync(path.join(home, ".cursor", "mcp.json"), "utf8"),
+      readFileSync(path.join(home, ".lazyweb", "email"), "utf8"),
+      readFileSync(claudeLog, "utf8")
+    ];
+    assert.deepEqual(connection(viaInstaller), connection(direct));
+    assert.match(connection(viaInstaller)[0], new RegExp(`Authorization = "Bearer ${EMAIL}"`));
+    assert.ok(result.stdout.includes(`Lazyweb skill pack ${readFileSync(path.join(root, "VERSION"), "utf8").trim()} is set up for ${EMAIL}.`), result.stdout);
+    for (const file of MINTED_FILES) {
+      assert.equal(existsSync(path.join(viaInstaller.home, file)), false, `${file} must not be created`);
+    }
+    assert.equal(readFileSync(viaInstaller.curlLog, "utf8"), PREVIOUS_INSTALLER_CURL_LOG);
+  } finally {
+    rmSync(viaInstaller.dir, { recursive: true, force: true });
+    rmSync(direct.dir, { recursive: true, force: true });
+  }
+});
+
+test("setup reads one bare address as --email and accepts the same address given both ways", () => {
+  const bare = makeSandbox("lazyweb-setup-bare-email-");
+  const both = makeSandbox("lazyweb-setup-both-email-");
+  for (const box of [bare, both]) mkdirSync(path.join(box.home, ".cursor"), { recursive: true });
+
+  try {
+    const results = [runSetup(bare.home, bare.fakeBin, [EMAIL, "--quiet"]), runSetup(both.home, both.fakeBin, ["--email", EMAIL, EMAIL, "--quiet"])];
+    for (const result of results) assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(results[0].stdout.replaceAll(bare.home, "~"), results[1].stdout.replaceAll(both.home, "~"));
+    for (const file of [".cursor/mcp.json", ".lazyweb/email"]) {
+      assert.equal(readFileSync(path.join(bare.home, file), "utf8"), readFileSync(path.join(both.home, file), "utf8"), file);
+    }
+    assert.match(readFileSync(path.join(bare.home, ".lazyweb", "email"), "utf8"), new RegExp(`^${EMAIL}\\n$`));
+  } finally {
+    rmSync(bare.dir, { recursive: true, force: true });
+    rmSync(both.dir, { recursive: true, force: true });
   }
 });
 
@@ -525,7 +584,7 @@ test("setup --email replaces a header-based connection and keeps neighbouring en
   }
 });
 
-test("setup rejects a malformed email and an unknown host before writing anything", () => {
+test("setup rejects a malformed email, an unknown host and two different addresses before writing anything", () => {
   const box = makeSandbox("lazyweb-setup-bad-args-");
   const { dir, home, fakeBin } = box;
   mkdirSync(path.join(home, ".codex"), { recursive: true });
@@ -535,12 +594,23 @@ test("setup rejects a malformed email and an unknown host before writing anythin
       ["--email", "not-an-email"],
       ["--email", "ada@example"],
       ["--email", "ada@example.com\nX-Injected: 1"],
-      ["--email", EMAIL, "--host", "nope"]
+      ["--email", EMAIL, "--host", "nope"],
+      ["ada@example"],
+      ["--ada@example.com"],
+      [EMAIL, "bob@example.com"],
+      ["--email", EMAIL, "bob@example.com"],
+      ["bob@example.com", "--email", EMAIL]
     ]) {
       const result = runSetup(home, fakeBin, args);
       assert.notEqual(result.status, 0, `setup ${args.join(" ")} must fail`);
       assert.deepEqual(listFiles(home), [], `setup ${args.join(" ")} must write nothing`);
     }
+    assert.match(runSetup(home, fakeBin, ["ada@example"]).stderr, /^Unknown option: ada@example\n/);
+    assert.equal(
+      runSetup(home, fakeBin, ["--email", EMAIL, "bob@example.com"]).stderr,
+      `Give one email address, not both --email ${EMAIL} and bob@example.com.\n`
+    );
+    assert.equal(runSetup(home, fakeBin, [EMAIL, "bob@example.com"]).stderr, `Give one email address, not both ${EMAIL} and bob@example.com.\n`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

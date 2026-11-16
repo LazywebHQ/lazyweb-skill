@@ -89,8 +89,9 @@ The installer checks for git, clones or updates this repo at
   finds no Lazyweb MCP entry in Codex, Claude Code, Cursor or Antigravity, it
   still exits 0 and prints:
   `Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com`
-- `setup` takes the email from `--email` and nowhere else: not git config, not
-  a client's login file, not the environment.
+- `setup` takes the email from its command line (`--email`, or one bare
+  address) and nowhere else: not git config, not a client's login file, not
+  the environment.
 - `setup` never replaces an existing sign-in (OAuth) Lazyweb connection with a
   header-based one, in any client. A connection is header-based only if its
   entry carries an Authorization header; any other header leaves it a sign-in

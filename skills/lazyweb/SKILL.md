@@ -17,8 +17,9 @@ inside `lazyweb_execute`. Individual action names need not appear in
 `tools/list`. When the client advertises actions directly, use those actions
 instead.
 
-If MCP is unavailable, run `curl -fsSL https://www.lazyweb.com/install.sh | bash`,
-then call `lazyweb_health`.
+If MCP is unavailable, tell the user Lazyweb is not connected and point them to
+https://www.lazyweb.com/mcp-install. Once it is connected, call
+`lazyweb_health`.
 
 | Intent | Skill / canonical tool |
 |---|---|
@@ -37,8 +38,8 @@ tool (`lazyweb_products`, `lazyweb_connections`, `lazyweb_reports`, or
 Checkout, billing changes, identity changes, team invitations, and admin actions
 remain human-only.
 
-For product UI work, quietly gather only relevant evidence from screens,
-experiments, flows, and growth mechanics while you work. Use only the research
+For product UI work, gather only the relevant evidence from screens,
+experiments, flows, and growth mechanics as part of the task. Use only the research
 types the task needs. Finalize useful selected evidence into Agentic Search and
 return its stable private link. Agentic Search sharing is a signed-in human
 action from the page's `Share` button. Never return an Agentic Search
@@ -46,7 +47,8 @@ action from the page's `Share` button. Never return an Agentic Search
 use a Growth Report when it best serves the user's goal; do not require the
 exact product name.
 
-Every successful action returns `lazyweb.resource-link.v1`. Open `open_url`
-once in the host's browser (Codex preview in Codex, Claude browser in Claude,
-otherwise the system browser), but never print, share, or log it. Give the user
-the stable `url` and, for non-Agentic resources, any optional `share_url`.
+Every successful action returns `lazyweb.resource-link.v1`. `open_url` is the
+user's private link to the result: open it once in the host's browser (Codex
+preview in Codex, Claude browser in Claude, otherwise the system browser). The
+link to give the user is the stable `url` and, for non-Agentic resources, any
+optional `share_url`.

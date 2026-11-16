@@ -45,30 +45,27 @@ exactly what they'll get:
    `{ installed, latest, update_available, install_hint }` — tell the user the
    installed vs latest version and whether an update is available.
 3. **If the Lazyweb MCP is not available** — a fresh or broken install is the
-   usual reason someone runs this skill — skip the tool and compare directly,
-   then proceed:
+   usual reason someone runs this skill — skip the tool and read the published
+   version instead:
    ```bash
    curl -fsSL https://raw.githubusercontent.com/aboul3ata/lazyweb-skill/main/VERSION
    ```
 
-`update_available` tells the user what's new, but it does **not** gate the
-reinstall. The updater below reruns setup with `--host all`, which also repairs
-broken, stale, or newly-added client skill roots — a current `VERSION` does not
-mean those are in sync. So:
+The updater below reruns setup with `--host all`. Besides installing a newer
+version, that repairs broken, stale, or newly added client skill roots, so a
+reinstall can be useful when the installed version is already current.
 
-- If the user asked to **update, reinstall, or sync** Lazyweb (the normal case):
-  run the updater below **regardless of `update_available`**. Even when already
-  current, the reinstall brings every client skill root back in sync.
-- Only if the user asked **purely for a status check** (e.g. "is there a Lazyweb
-  update?"): report installed vs latest and stop without reinstalling.
+- If the user asked only for a status check (for example "is there a Lazyweb
+  update?"): report installed vs latest and stop.
+- Otherwise tell the user the installed and latest versions and what the
+  updater does (next section), and ask whether to run it.
 
 ## Run the update
 
-`~/.lazyweb/bin/lazyweb-update` is a trusted local binary the user already
-installed — it only refreshes the local checkout and reinstalls local skills. Do
-not stack up multiple permission gates around it: a single lightweight "Updating
-your local Lazyweb skills now." confirmation is enough (any client tool-approval
-prompt already covers the rest).
+Ask the user before running the updater, and run it only after they agree.
+`~/.lazyweb/bin/lazyweb-update` fetches the latest skill pack from GitHub into
+`~/.lazyweb/repos/lazyweb-skill` and reinstalls the local skills. It does not
+change an existing Lazyweb MCP connection and does not need the user's email.
 
 Use the bundled updater when available:
 
@@ -102,14 +99,21 @@ fi
 "$TARGET/setup" --host all --quiet
 ```
 
-The public installer remains:
+The updater never adds a Lazyweb connection. If setup's summary says
+`No Lazyweb connection was added, because no email was given`, the skills are
+installed and setup found no Lazyweb MCP entry in Codex, Claude Code, Cursor
+or Antigravity. If Lazyweb tools are already listed in your client, you are set up.
+Otherwise tell the user Lazyweb is not connected. To connect it:
+
+Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.
+
+Then run setup again with that address:
 
 ```bash
-curl -fsSL https://www.lazyweb.com/install.sh | bash
+"$HOME/.lazyweb/repos/lazyweb-skill/setup" --email USER_EMAIL
 ```
 
-But for this skill, prefer the commands above because they explicitly reinstall
-every supported local skill root with `--host all`.
+The steps for each client are at https://www.lazyweb.com/mcp-install.
 
 ## Verify
 
@@ -181,11 +185,10 @@ After the updater finishes:
    installed version is current.
 5. If Lazyweb MCP tools are available in the current client, run
    `lazyweb_health`.
-6. **Always tell the user to RESTART the client.** Skills are loaded at client
-   startup, so a disk-level prune does NOT fix the currently-running session —
-   the old slash commands stay visible and invokable until restart. This is the
-   one step that actually clears a trapped session; do not skip it even when the
-   disk looks clean.
+6. Tell the user to restart the client. Skills are loaded at client startup, so
+   a disk-level prune does not change the running session: the old slash
+   commands stay visible and invokable until the restart, even when the disk
+   looks clean.
 
 Summarize the updated commit/version, which clients were refreshed, whether any
 stale skill dirs were found and removed, and remind the user to restart the

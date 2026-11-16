@@ -16,8 +16,8 @@ its returned `isError`. If actions are advertised directly, call them directly.
 Missing individual names in `tools/list` does not mean MCP is unavailable.
 
 
-If Lazyweb MCP is unavailable, run
-`curl -fsSL https://www.lazyweb.com/install.sh | bash`, then call
+If Lazyweb MCP is unavailable, tell the user Lazyweb is not connected and point
+them to https://www.lazyweb.com/mcp-install. Once it is connected, call
 `lazyweb_health`.
 
 Call `lazyweb_search_flows` using its live schema. Preserve the returned
@@ -28,7 +28,7 @@ When done, call `lazyweb_agentic_search_finalize` with the ordered selected
 references. If `agentic_search_saved` is false, keep the search results but do
 not fabricate a finalized link.
 
-Pass `skill: "lazyweb-search-flows"` plus VERSION/integrity. Open private
-`open_url` once through the host browser, never expose it, and return the
-private `url`. Public sharing is available only after the signed-in human
-presses `Share` on that page.
+Pass `skill: "lazyweb-search-flows"` plus VERSION/integrity. `open_url` is
+the user's private link to the result: open it once in the host browser. The
+link to give the user is the private `url`. Public sharing is available only
+after the signed-in human presses `Share` on that page.

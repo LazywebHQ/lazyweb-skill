@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Update the GitHub-backed Lazyweb skill checkout, then reinstall skills into
-# local coding clients. This intentionally bypasses install.sh's auto-host
-# wrapper so agents can request --host all deterministically.
+# local coding clients. It runs setup with no email, so an existing Lazyweb MCP
+# connection is left exactly as it is; only the skills are refreshed.
 set -euo pipefail
 
 REPO="${LAZYWEB_SKILL_REPO:-https://github.com/aboul3ata/lazyweb-skill}"
@@ -18,7 +18,8 @@ usage() {
 Usage: lazyweb-update [--host auto|all|codex|claude|cursor|opencode|kiro|factory|slate|hermes|antigravity] [--quiet] [--auto-update|--no-auto-update]
 
 Pulls the Lazyweb skill pack from GitHub and reruns setup for the selected host.
-Defaults to --host all so all local skill roots are refreshed.
+Defaults to --host all so all local skill roots are refreshed. An existing
+Lazyweb MCP connection is not changed.
 USAGE
 }
 

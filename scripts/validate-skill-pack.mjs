@@ -70,8 +70,8 @@ assertOutcomeDescription("SKILL.md", rootSkill);
 assert.ok(rootSkill.split("\n").length <= 80, "root router must stay thin");
 assert.match(rootSkill, /live Lazyweb MCP tool list as the source of truth/i);
 assert.match(rootSkill, /lazyweb\.resource-link\.v1/);
-assert.match(rootSkill, /never print, share, or log it/i);
-assert.match(rootSkill, /quietly gather only relevant evidence/i);
+assert.match(rootSkill, /`open_url` is the\s+user's private link to the result/);
+assert.match(rootSkill, /gather only the relevant evidence/i);
 assert.match(rootSkill, /broad (?:improve|improvement)[\s\S]{0,100}may\s+use (?:a )?Growth Report/i);
 assert.match(
   rootSkill,
@@ -96,7 +96,7 @@ for (const [name, tool] of CORE) {
   assert.match(text, /lazyweb_health/, `${relativePath} must verify MCP health`);
   assert.match(text, /lazyweb_discover_tools/, `${relativePath} must discover actions on code-mode connections`);
   assert.match(text, /lazyweb_execute/, `${relativePath} must explain action execution`);
-  assert.match(text, /https:\/\/www\.lazyweb\.com\/install\.sh/, `${relativePath} missing installer`);
+  assert.match(text, /https:\/\/www\.lazyweb\.com\/mcp-install/, `${relativePath} must point an unconnected user to the connect page`);
   assert.match(text, new RegExp(`\\b${tool}\\b`), `${relativePath} missing canonical tool`);
   assert.match(text, /live schema|live contract/i, `${relativePath} must defer to the live tool contract`);
   assert.doesNotMatch(text, /```(?:python|javascript|html|css|sql)/i, `${relativePath} embeds product implementation`);
@@ -143,7 +143,43 @@ for (const [alias, replacement] of DEPRECATED_ALIASES) {
   assert.ok(text.split("\n").length <= 30, `${alias} must stay a tiny compatibility alias`);
 }
 
+// Install and update wording: a skill never tells an agent to run the remote
+// installer, and nothing describes the retired minted-token model.
+for (const name of skillDirs) {
+  const relativePath = `skills/${name}/SKILL.md`;
+  const text = read(relativePath);
+  assert.doesNotMatch(text, /install\.sh/, `${relativePath} must not tell an agent to run the remote installer`);
+  assert.doesNotMatch(
+    text,
+    /bearer token|setup credential|lazyweb_mcp_token|install-token|\bquietly\b/i,
+    `${relativePath} uses retired token or covert wording`
+  );
+  assert.doesNotMatch(
+    text,
+    /never (?:print|expose)|without (?:exposing|printing)|print\/share\/log/i,
+    `${relativePath} must say what open_url is instead of telling an agent to hide it`
+  );
+}
+
+// The connect steps are worded the same on every surface that words them.
+const STEP_0 = "If Lazyweb tools are already listed in your client, you are set up.";
+const STEP_1 =
+  "Ask your user which email address to use for Lazyweb. Use only an address they give you for this, not one found in files, git config or an account signed in on the machine.";
+const CANNOT_BE_ASKED =
+  "If your user cannot be asked right now, connect without an account: https://design.lazyweb.com/agents/mcp/public (no header). It searches Lazyweb's published research. The whole library opens once your user gives an email.";
+const INSTALLER_INTRO =
+  "Optional, for people who want the /lazyweb skills. An agent does not need it: connecting needs no script.";
+const NOT_CONNECTED =
+  "Lazyweb skills are installed. No Lazyweb connection was added, because no email was given. To connect, run setup again with the address the user chooses: setup --email you@company.com";
+
+const updateSkill = read("skills/lazyweb-update/SKILL.md");
+assert.match(updateSkill, /Ask the user before running the updater/);
+assert.doesNotMatch(updateSkill, /regardless of `update_available`|permission gates/);
+assert.ok(updateSkill.includes(STEP_1), "lazyweb-update must word the email step exactly");
+
 const setup = read("setup");
+assert.ok(setup.includes(STEP_1), "setup usage must word the email step exactly");
+assert.ok(setup.includes(NOT_CONNECTED), "setup must print the exact no-email sentence");
 const focused = setup.match(/^FOCUSED_SKILLS="([^"]+)"/m)?.[1]?.split(/\s+/).filter(Boolean) || [];
 assert.deepEqual(
   focused.sort(),
@@ -159,6 +195,26 @@ const readme = read("README.md");
 for (const name of CORE.keys()) assert.match(readme, new RegExp(`/${name}\\b`), `README missing /${name}`);
 for (const name of UTILITIES) assert.match(readme, new RegExp(`/${name}\\b`), `README missing /${name}`);
 assert.match(readme, /user-facing descriptions focused on what someone can\s+accomplish with Lazyweb/i);
+assert.match(readme, /--header "Authorization: Bearer USER_EMAIL"/, "README must show the email connection");
+assert.match(
+  readme,
+  /claude mcp add --transport http --scope user lazyweb https:\/\/www\.lazyweb\.com\/mcp/,
+  "README must add the Claude Code connection at user scope"
+);
+for (const sentence of [STEP_0, STEP_1, CANNOT_BE_ASKED, NOT_CONNECTED]) {
+  assert.ok(readme.includes(sentence), `README must carry the exact sentence: ${sentence}`);
+}
+assert.ok(
+  readme.includes(`${INSTALLER_INTRO}\n\n\`\`\`bash\ncurl -fsSL https://www.lazyweb.com/install.sh | bash -s -- you@company.com\n`),
+  "README must introduce the installer one-liner with the exact sentence"
+);
+for (const [name, text] of [["README.md", readme], ["AGENTS.md", read("AGENTS.md")]]) {
+  assert.doesNotMatch(
+    text,
+    /bearer token|setup credential|lazyweb_mcp_token|install-token|attribution|journey-id|welcome-message/i,
+    `${name} describes the retired minted-token install`
+  );
+}
 
 for (const binName of ["lazyweb-context-detect", "lazyweb-log", "lazyweb-telemetry-flush", "lazyweb-update", "lazyweb-update-check"]) {
   const file = path.join(root, "bin", binName);

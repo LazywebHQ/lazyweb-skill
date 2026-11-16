@@ -16,8 +16,8 @@ its returned `isError`. If actions are advertised directly, call them directly.
 Missing individual names in `tools/list` does not mean MCP is unavailable.
 
 
-If Lazyweb MCP is unavailable, run
-`curl -fsSL https://www.lazyweb.com/install.sh | bash`, then call
+If Lazyweb MCP is unavailable, tell the user Lazyweb is not connected and point
+them to https://www.lazyweb.com/mcp-install. Once it is connected, call
 `lazyweb_health`.
 
 Call `lazyweb_growth_backlog`; inspect its live schema first. `list` needs the
@@ -27,5 +27,5 @@ idempotency key; pass optional surface and `result_ref` evidence unchanged.
 Do not invent an impact estimate, visible recommendation number, or visual
 asset. Pass `skill: "lazyweb-growth-backlog"` plus VERSION/integrity.
 
-Return the stable `url`. If `open_url` exists, open it once in the host browser
-without printing, sharing, or logging it.
+Return the stable `url`. If `open_url` exists, it is the user's private link to
+the result: open it once in the host browser.

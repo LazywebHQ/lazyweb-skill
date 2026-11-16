@@ -16,11 +16,11 @@ Plan format (JSON):
 
 Exit codes:
   0  -> evidence.json written, >=50% of queries succeeded
-  2  -> FALLBACK: token missing, initialize failed, or >50% queries failed.
+  2  -> FALLBACK: email missing, initialize failed, or >50% queries failed.
         The skill falls back to agent-driven MCP gathering (v3.3 path).
 
-Env overrides (tests): LAZYWEB_MCP_URL, LAZYWEB_MCP_TOKEN.
-The bearer token is never printed.
+The bearer is the email recorded by `setup --email` (~/.lazyweb/email): an
+identifier, not a secret. Env overrides (tests): LAZYWEB_MCP_URL, LAZYWEB_EMAIL.
 """
 import argparse
 import concurrent.futures
@@ -44,11 +44,11 @@ def log(msg):
     print(msg, file=sys.stderr)
 
 
-def load_token():
-    tok = os.environ.get("LAZYWEB_MCP_TOKEN", "").strip()
-    if tok:
-        return tok
-    p = pathlib.Path.home() / ".lazyweb" / "lazyweb_mcp_token"
+def load_email():
+    email = os.environ.get("LAZYWEB_EMAIL", "").strip()
+    if email:
+        return email
+    p = pathlib.Path.home() / ".lazyweb" / "email"
     if p.is_file():
         return p.read_text().strip()
     return ""
@@ -76,9 +76,9 @@ def parse_body(raw, content_type):
 
 
 class McpClient:
-    def __init__(self, endpoint, token):
+    def __init__(self, endpoint, email):
         self.endpoint = endpoint
-        self.token = token
+        self.email = email
         self.session_id = None
 
     def _post(self, payload, timeout=TIMEOUT_S):
@@ -86,7 +86,7 @@ class McpClient:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {self.token}",
+            "Authorization": f"Bearer {self.email}",
         }
         if self.session_id:
             headers["Mcp-Session-Id"] = self.session_id
@@ -114,7 +114,7 @@ class McpClient:
             headers = {
                 "Content-Type": "application/json",
                 "Accept": "application/json, text/event-stream",
-                "Authorization": f"Bearer {self.token}",
+                "Authorization": f"Bearer {self.email}",
             }
             if self.session_id:
                 headers["Mcp-Session-Id"] = self.session_id
@@ -228,9 +228,9 @@ def main():
     ap.add_argument("--endpoint", default=os.environ.get("LAZYWEB_MCP_URL", DEFAULT_ENDPOINT))
     opts = ap.parse_args()
 
-    token = load_token()
-    if not token:
-        log("FETCH_FALLBACK: no Lazyweb MCP token found")
+    email = load_email()
+    if not email:
+        log("FETCH_FALLBACK: no Lazyweb email found (~/.lazyweb/email)")
         return FALLBACK
 
     plan = json.loads(pathlib.Path(opts.plan).read_text())
@@ -239,7 +239,7 @@ def main():
         log("FETCH_FALLBACK: empty query plan")
         return FALLBACK
 
-    client = McpClient(opts.endpoint, token)
+    client = McpClient(opts.endpoint, email)
     try:
         client.initialize()
     except Exception as exc:

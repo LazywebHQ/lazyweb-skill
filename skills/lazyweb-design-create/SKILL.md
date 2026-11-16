@@ -91,9 +91,9 @@ The report is rendered and hosted **server-side**. You author the report
 content as `work/report-data.json`, then call `lazyweb_render_report` ONCE.
 That call fills the canonical template on the server, validates it, hosts it at
 `https://www.lazyweb.com/report/lazyweb/{id}/`, and returns the shareable link.
-There is no local `report.html` to write, no separate publish step, and no
-token to read — producing the report and hosting it are the same action, so a
-finished report is always a shared report.
+There is no local `report.html` to write and no separate publish step —
+producing the report and hosting it are the same action, so a finished report
+is always a shared report.
 
 Call it once `work/report-data.json` and every `references/` image exist. The
 report dir is `$REPORT_DIR = .lazyweb/deep-design-research/{topic-slug}-{YYYY-MM-DD}`.
@@ -139,11 +139,11 @@ You never write HTML — you only choose image `src` values in `report-data.json
 
 Use the hosted Lazyweb MCP tools at `https://www.lazyweb.com/mcp` for all Lazyweb database access.
 
-Downloading or updating the skill pack, installing or configuring a client,
-and creating or reusing a bearer token are available to everyone without
-charge. Setup, health, and workflow discovery remain usable regardless
-of plan; real data-bearing MCP tool availability and usage limits depend on the
-account's persisted experiment assignment and plan.
+Downloading or updating the skill pack and connecting a client with the
+user's email address are available to everyone without charge. The email is an
+identifier, not a secret. Setup, health, and workflow discovery remain usable
+regardless of plan; real data-bearing MCP tool availability and usage limits
+depend on the account's persisted experiment assignment and plan.
 
 Required MCP tools:
 - `lazyweb_search` - text search over mobile and desktop screenshots
@@ -173,10 +173,10 @@ by `companies.high_design_bar = true`.
 Before searching, verify MCP is available by listing tools and running
 `lazyweb_health`.
 
-**If a Lazyweb tool is refused as OUT OF DATE** — the result has `code: "skill_deprecated"` / `action_required: "upgrade"` / `do_not_fallback: true`, or says your skill pack is below the required version — this is a **HARD STOP, not a fallback case**. Do NOT proceed in web-research-only or any degraded mode; that output is deprecated and ungrounded. STOP the task, tell the user they must upgrade, and have them run `/lazyweb-update` (or `curl -fsSL https://www.lazyweb.com/install.sh | bash`), reload the client, and retry. The design tools are now unified under `/lazyweb-design`.
+**If a Lazyweb tool is refused as OUT OF DATE** — the result has `code: "skill_deprecated"` / `action_required: "upgrade"` / `do_not_fallback: true`, or says your skill pack is below the required version — this is a **HARD STOP, not a fallback case**. Do NOT proceed in web-research-only or any degraded mode; that output is deprecated and ungrounded. STOP the task, tell the user they must upgrade, and have them run `/lazyweb-update`, reload the client, and retry. The design tools are now unified under `/lazyweb-design`.
 
 **If Lazyweb MCP is genuinely not installed or auth fails** (a connection/auth error — NOT a version refusal):
-Tell the user: "Lazyweb MCP is not installed. Run `curl -fsSL https://www.lazyweb.com/install.sh | bash`, reload this client, then rerun this skill. Installing and receiving a bearer token do not require payment; real data-bearing MCP access and limits depend on your assigned experiment and plan. Keep the token in ignored local config."
+Tell the user: "Lazyweb is not connected. The setup steps are at https://www.lazyweb.com/mcp-install; connecting needs only your email address and does not require payment. Reload this client afterwards, then rerun this skill."
 Then proceed with web research only - the skill still works, just without Lazyweb's database.
 
 ## Browse Setup (run BEFORE any web capture)
@@ -415,7 +415,7 @@ upload tools (spec: `specs/image-upload-architecture.md`):
 1. Determine the `mime_type` of `$REPORT_DIR/references/current-state.png`
    (`image/png`, `image/jpeg`, or `image/webp`).
 2. `lazyweb_request_image_upload({ mime_type })` -> `{ upload_url, key }`
-   (authed by the MCP session; no `~/.lazyweb` token needed).
+   (authed by the MCP session).
 3. PUT the bytes with NO credentials:
    `curl -fsS -X PUT -H "content-type: <mime>" --data-binary @"$REPORT_DIR/references/current-state.png" "<upload_url>"`
 4. `lazyweb_resolve_image_upload({ key })` -> `{ image_url }`.

@@ -16,8 +16,8 @@ its returned `isError`. If actions are advertised directly, call them directly.
 Missing individual names in `tools/list` does not mean MCP is unavailable.
 
 
-If Lazyweb MCP is unavailable, run
-`curl -fsSL https://www.lazyweb.com/install.sh | bash`, then call
+If Lazyweb MCP is unavailable, tell the user Lazyweb is not connected and point
+them to https://www.lazyweb.com/mcp-install. Once it is connected, call
 `lazyweb_health`.
 
 Call `lazyweb_growth_score`; inspect its live schema first. Choose `get` for a
@@ -28,6 +28,6 @@ Never turn a read, page open, or version mismatch into a regrade.
 Pass `skill: "lazyweb-growth-score"` plus the installed VERSION/integrity tags.
 Do not reproduce scoring rules in the skill.
 
-On success, open `open_url` only when provided and only through the host browser;
-never expose it. Return the stable `url` to the user and include `share_url` when
-present.
+On success, `open_url`, when provided, is the user's private link to the result:
+open it once in the host browser. The link to give the user is the stable `url`,
+with `share_url` when present.

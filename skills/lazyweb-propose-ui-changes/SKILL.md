@@ -35,9 +35,10 @@ This skill drives these Lazyweb MCP tools:
 - `lazyweb_propose_ui_changes` — store a proposal (current + proposed + annotations), get a review URL.
 - `lazyweb_get_proposal_decision` — poll the user's accept/decline verdicts.
 
-> **Prerequisite:** the Lazyweb MCP must be connected and current. If
-> `lazyweb_propose_ui_changes` isn't in the tool list, the skill pack/MCP is out
-> of date — tell the user to update (`curl -fsSL https://www.lazyweb.com/install.sh | sh`)
+> **Prerequisite:** the Lazyweb MCP is connected and current. If no Lazyweb
+> tools are listed, tell the user Lazyweb is not connected and point them to
+> https://www.lazyweb.com/mcp-install. If `lazyweb_propose_ui_changes` alone is
+> missing, the skill pack is out of date: tell the user to run `/lazyweb-update`
 > and restart their client.
 
 ### MCP plan responses

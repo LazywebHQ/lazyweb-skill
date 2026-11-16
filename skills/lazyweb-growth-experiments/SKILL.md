@@ -16,6 +16,6 @@ Missing individual names in `tools/list` does not mean MCP is unavailable.
 
 
 Use `/lazyweb-search-experiments` and the canonical
-`lazyweb_search_experiments` tool. If MCP is unavailable, run
-`curl -fsSL https://www.lazyweb.com/install.sh | bash` and call
-`lazyweb_health`.
+`lazyweb_search_experiments` tool. If MCP is unavailable, tell the user Lazyweb
+is not connected and point them to https://www.lazyweb.com/mcp-install. Once it
+is connected, call `lazyweb_health`.
